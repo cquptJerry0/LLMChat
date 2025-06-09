@@ -13,16 +13,13 @@ export enum StreamStatus {
 
 // 单个消息流的状态接口
 export interface StreamState {
-  id: string;            // 消息ID (对应Message.id)
+  id: string;            // 流ID (格式为 stream_${messageId})
+  messageId: string;     // 消息ID
   status: StreamStatus;  // 当前状态
-  content: string;       // 当前累积的内容
-  reasoning_content?: string; // 当前累积的推理内容
   startTime: number;     // 开始时间戳
   pauseTime?: number;    // 暂停时间戳
   completeTime?: number; // 完成时间戳
   error?: string;        // 错误信息
-  completion_tokens?: number; // 已完成的token数
-  speed?: number;        // 生成速度 (tokens/second)
   abortController?: AbortController; // 用于中断请求的控制器
 }
 
@@ -32,7 +29,7 @@ export interface StreamStateManager {
   getStreamState: (messageId: string) => StreamState | undefined;
 
   // 开始新的流
-  startStream: (messageId: string) => void;
+  startStream: (messageId: string) => string;
 
   // 更新流内容
   updateStream: (
@@ -43,27 +40,26 @@ export interface StreamStateManager {
     speed?: number
   ) => void;
 
-  // 暂
-  pauseStream: (messageId: string) => Promise<void>;
+  // 暂停流
+  pauseStream: (messageId: string) => boolean;
 
   // 恢复流
-  resumeStream: (messageId: string) => Promise<void>;
+  resumeStream: (messageId: string) => AbortSignal | null;
 
   // 完成流
-  completeStream: (messageId: string) => void;
+  completeStream: (messageId: string) => boolean;
 
   // 设置流错误
-  setStreamError: (messageId: string, error: string) => void;
-
-  // 清除指定流
-  clearStream: (messageId: string) => void;
-
-  // 清除所有流
-  clearAllStreams: () => void;
+  setStreamError: (messageId: string, error: string) => boolean;
 }
 
 // 流状态存储接口
 export interface StreamStore {
-  streamStates: Map<string, StreamState>;
-  streamStateManager: StreamStateManager;
+  streams: Map<string, StreamState>;
+  startStream: (messageId: string) => string;
+  updateStream: (messageId: string, content: string, reasoning_content?: string, completion_tokens?: number, speed?: number) => void;
+  pauseStream: (messageId: string) => boolean;
+  resumeStream: (messageId: string) => AbortSignal | null;
+  completeStream: (messageId: string) => boolean;
+  setStreamError: (messageId: string, error: string) => boolean;
 }

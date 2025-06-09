@@ -28,7 +28,6 @@ const settingStore = useSettingStore()
 
 // 获取消息容器
 const messagesContainer = ref<HTMLDivElement | null>(null)
-// 监听消息变化，不再需要滚动到底部
 watch(
   currentMessages,
   () => {

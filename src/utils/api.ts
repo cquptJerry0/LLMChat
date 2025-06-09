@@ -40,7 +40,7 @@ export const createChatCompletion = async (
 
   // 如果提供了messageId，启动流状态跟踪
   if (messageId && settingStore.settings.stream) {
-    streamStore.streamStateManager.startStream(messageId)
+    streamStore.startStream(messageId)
   }
 
   // 构建请求参数
@@ -69,7 +69,7 @@ export const createChatCompletion = async (
     },
     body: JSON.stringify(payload),
     // 添加中断信号
-    signal: options?.signal || (messageId ? streamStore.streamStateManager.getStreamState(messageId)?.abortController?.signal : undefined)
+    signal: options?.signal || (messageId ? streamStore.streams.get(messageId)?.abortController?.signal : undefined)
   }
 
   try {
@@ -95,7 +95,7 @@ export const createChatCompletion = async (
 
     // 注意：speed 不是 API 的标准字段，这里我们在客户端计算它
     const duration = (Date.now() - startTime) / 1000
-    ;(data as any).speed = (data.usage.completion_tokens / duration).toFixed(2)
+      ; (data as any).speed = (data.usage.completion_tokens / duration).toFixed(2)
 
     return data
   } catch (error) {
@@ -105,10 +105,10 @@ export const createChatCompletion = async (
     if (error instanceof DOMException && error.name === 'AbortError') {
       if (messageId) {
         // 中断处理逻辑
-        const state = streamStore.streamStateManager.getStreamState(messageId)
+        const state = streamStore.streams.get(messageId)
         if (state && state.status === StreamStatus.STREAMING) {
           // 如果中断时状态还是streaming，说明是错误导致的中断而非暂停
-          streamStore.streamStateManager.setStreamError(messageId, '请求被中断')
+          streamStore.setStreamError(messageId, '请求被中断')
         }
       }
 
@@ -120,7 +120,7 @@ export const createChatCompletion = async (
 
     if (messageId) {
       // 更新流状态为错误
-      streamStore.streamStateManager.setStreamError(
+      streamStore.setStreamError(
         messageId,
         error instanceof Error ? error.message : '未知错误'
       )
@@ -146,7 +146,7 @@ export const resumeChatCompletion = async (
   options?: APIRequestOptions
 ): Promise<StreamResponse> => {
   const streamStore = useStreamStore()
-  const state = streamStore.streamStateManager.getStreamState(messageId)
+  const state = streamStore.streams.get(messageId)
 
   // 验证状态
   if (!state || state.status !== StreamStatus.PAUSED) {
@@ -154,7 +154,7 @@ export const resumeChatCompletion = async (
   }
 
   // 更新状态为流式处理中
-  streamStore.streamStateManager.resumeStream(messageId)
+  streamStore.resumeStream(messageId)
 
   // 调用API
   const response = await createChatCompletion(
