@@ -143,3 +143,9 @@ export interface APIFunctions {
     options?: APIRequestOptions
   ) => Promise<StreamResponse>;
 }
+
+// 客户端扩展的聊天响应类型（添加了速度字段）
+export interface ExtendedChatCompletionResponse extends ChatCompletionResponse {
+  // 扩展字段：生成速度，客户端计算得出，单位为tokens/second
+  speed: number;
+}

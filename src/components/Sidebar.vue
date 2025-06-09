@@ -23,7 +23,7 @@ const handleClose = () => {
 </script>
 
 <template>
-  <div class="sidebar" :class="[`sidebar--${displayMode}`]">
+  <div class="sidebar" :class="[`sidebar--${props.displayMode}`]">
     <!-- 会话列表 -->
     <div class="sidebar__content">
       <Conversations />

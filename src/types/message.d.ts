@@ -53,11 +53,11 @@ export interface DeltaMessage {
  * 用于在接收到新内容时更新UI
  */
 export type UpdateCallback = (
-  content: string,                // 当前累积的内容
-  reasoning_content: string,      // 当前累积的推理内容
-  completion_tokens: number,      // 完成的token数量
-  speed: string,                  // 生成速度
-  tool_calls?: ToolCall[]         // 工具调用列表
+  content: string,
+  reasoning_content: string,
+  completion_tokens: number,
+  speed: string,
+  tool_calls?: ToolCall[]
 ) => void;
 
 /**

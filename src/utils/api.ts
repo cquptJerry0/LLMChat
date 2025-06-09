@@ -9,8 +9,10 @@ import type {
   APIError as APIErrorType,
   APIRequestOptions
 } from '@/types/api'
+import { calculateSpeed } from '@/utils/speed'
 
-const API_BASE_URL = 'https://api.siliconflow.cn/v1'
+// 从环境变量获取API基础URL，回退到默认值
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://api.siliconflow.cn/v1'
 
 // API 错误类
 export class APIError extends Error implements APIErrorType {
@@ -94,8 +96,8 @@ export const createChatCompletion = async (
     const data = await response.json() as ChatCompletionResponse
 
     // 注意：speed 不是 API 的标准字段，这里我们在客户端计算它
-    const duration = (Date.now() - startTime) / 1000
-      ; (data as any).speed = (data.usage.completion_tokens / duration).toFixed(2)
+    const speed = calculateSpeed(data.usage.completion_tokens, startTime)
+      ; (data as any).speed = speed.toString()
 
     return data
   } catch (error) {

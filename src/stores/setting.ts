@@ -1,12 +1,16 @@
 import { defineStore } from 'pinia'
 import { reactive, ref } from 'vue'
 
+// 从环境变量获取配置，回退到默认值
+const API_KEY = import.meta.env.VITE_API_KEY || 'sk-miswxuakfhtsgcrobgggnjnigvbueatzsobuqsigqxanippa';
+const DEFAULT_MODEL = import.meta.env.VITE_DEFAULT_MODEL || 'deepseek-ai/DeepSeek-R1';
+
 export const useSettingStore = defineStore(
   'llm-setting',
   () => {
     const settings = reactive({
-      model: 'deepseek-ai/DeepSeek-R1',
-      apiKey: 'sk-miswxuakfhtsgcrobgggnjnigvbueatzsobuqsigqxanippa',
+      model: DEFAULT_MODEL,
+      apiKey: API_KEY,
       stream: true,
       maxTokens: 4096,
       temperature: 0.7,

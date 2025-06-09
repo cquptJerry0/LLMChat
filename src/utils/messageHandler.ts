@@ -16,6 +16,7 @@ import type { ChatCompletionResponse, ToolCall, StreamHandlerOptions } from '@/t
 import { XStream, type XStreamOptions } from './xstream';
 import { useStreamStore } from '@/stores/stream';
 import { StreamStatus } from '@/types/stream';
+import { calculateSpeed } from '@/utils/speed'
 
 /**
  * 消息处理器实现
@@ -124,9 +125,10 @@ export const messageHandler: MessageHandler = {
             accumulatedToolCalls = [...accumulatedToolCalls, ...delta.tool_calls]
           }
 
-          // 计算生成速度 (tokens/秒)
+          // 计算生成速度
           const elapsedTime = (Date.now() - startTime) / 1000
-          const speed = ((data.usage?.completion_tokens || 0) / elapsedTime).toFixed(2)
+          const speed = calculateSpeed(data.usage?.completion_tokens || 0, startTime)
+          const speedStr = speed.toString()
           const completion_tokens = data.usage?.completion_tokens || 0
 
           // 通过回调更新 UI
@@ -134,7 +136,7 @@ export const messageHandler: MessageHandler = {
             accumulatedContent,
             accumulatedReasoning,
             completion_tokens,
-            speed,
+            speedStr,
             accumulatedToolCalls
           )
 
@@ -145,7 +147,7 @@ export const messageHandler: MessageHandler = {
               accumulatedContent,
               accumulatedReasoning,
               completion_tokens,
-              parseFloat(speed)
+              parseFloat(speedStr)
             )
           }
         } catch (error) {
