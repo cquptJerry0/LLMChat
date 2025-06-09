@@ -1,0 +1,607 @@
+<script setup>
+import { computed, ref, onMounted, onUnmounted } from 'vue'
+import { renderMarkdown } from '@/utils/markdown'
+import { Document, ArrowDown } from '@element-plus/icons-vue'
+import { icons } from '@/constants/icons'
+
+// 定义props
+const props = defineProps({
+  message: {
+    type: Object,
+    required: true,
+  },
+  isLastAssistantMessage: {
+    type: Boolean,
+    default: false,
+  },
+})
+
+// 点赞和踩的状态
+const isLiked = ref(false)
+const isDisliked = ref(false)
+
+// 添加复制状态
+const isCopied = ref(false)
+
+// 添加重新生成的事件
+const emit = defineEmits(['regenerate'])
+
+// 添加展开/折叠状态控制
+const isReasoningExpanded = ref(true)
+
+// 切换展开/折叠状态
+const toggleReasoning = () => {
+  isReasoningExpanded.value = !isReasoningExpanded.value
+}
+
+// 处理复制函数
+const handleCopy = async () => {
+  try {
+    await navigator.clipboard.writeText(props.message.content)
+    isCopied.value = true
+
+    // 1.5秒后恢复原始图标
+    setTimeout(() => {
+      isCopied.value = false
+    }, 2500)
+  } catch (err) {
+    console.error('复制失败:', err)
+  }
+}
+
+// 处理点赞
+const handleLike = () => {
+  if (isDisliked.value) isDisliked.value = false
+  isLiked.value = !isLiked.value
+}
+
+// 处理踩
+const handleDislike = () => {
+  if (isLiked.value) isLiked.value = false
+  isDisliked.value = !isDisliked.value
+}
+
+// 添加重新生成的事件
+const handleRegenerate = () => {
+  emit('regenerate')
+}
+
+// 处理代码块的复制
+const handleCodeCopy = async (event) => {
+  const codeBlock = event.target.closest('.code-block')
+  const code = codeBlock.querySelector('code').textContent
+
+  try {
+    await navigator.clipboard.writeText(code)
+    // 可以添加复制成功的提示
+  } catch (err) {
+    console.error('复制失败:', err)
+  }
+}
+
+// 处理代码块主题切换
+const handleThemeToggle = (event) => {
+  const codeBlock = event.target.closest('.code-block')
+  const themeIcon = event.target.closest('[data-action="theme"]').querySelector('img')
+  const isDark = codeBlock.classList.contains('dark-theme')
+
+  // 切换代码块主题
+  codeBlock.classList.toggle('dark-theme')
+
+  // 切换图标
+  themeIcon.src = isDark ? themeIcon.dataset.themeLight : themeIcon.dataset.themeDark
+}
+
+// 修改事件监听的方式
+onMounted(() => {
+  // 使用 MutationObserver 来监听 DOM 变化
+  const observer = new MutationObserver((mutations) => {
+    mutations.forEach((mutation) => {
+      if (mutation.addedNodes.length) {
+        const codeBlocks = document.querySelectorAll('.code-block')
+        codeBlocks.forEach((block) => {
+          const copyBtn = block.querySelector('[data-action="copy"]')
+          const themeBtn = block.querySelector('[data-action="theme"]')
+
+          if (copyBtn && !copyBtn._hasListener) {
+            copyBtn.addEventListener('click', handleCodeCopy)
+            copyBtn._hasListener = true
+          }
+          if (themeBtn && !themeBtn._hasListener) {
+            themeBtn.addEventListener('click', handleThemeToggle)
+            themeBtn._hasListener = true
+          }
+        })
+      }
+    })
+  })
+
+  // 开始观察
+  observer.observe(document.body, {
+    childList: true,
+    subtree: true,
+  })
+
+  // 组件卸载时清理
+  onUnmounted(() => {
+    observer.disconnect()
+    const codeBlocks = document.querySelectorAll('.code-block')
+    codeBlocks.forEach((block) => {
+      const copyBtn = block.querySelector('[data-action="copy"]')
+      const themeBtn = block.querySelector('[data-action="theme"]')
+
+      copyBtn?.removeEventListener('click', handleCodeCopy)
+      themeBtn?.removeEventListener('click', handleThemeToggle)
+    })
+  })
+})
+
+// 将消息内容转换为 HTML
+const renderedContent = computed(() => {
+  console.log('Message content:', props.message.content)
+  return renderMarkdown(props.message.content)
+})
+
+// 添加 reasoning_content 的渲染
+const renderedReasoning = computed(() => {
+  if (!props.message.reasoning_content) return ''
+  return renderMarkdown(props.message.reasoning_content)
+})
+</script>
+
+<template>
+  <div class="chat-message" :class="[
+    message.role === 'user' ? 'chat-message--user' : 'chat-message--bot',
+    message.loading ? 'chat-message--waiting' : '',
+    'loaded'
+  ]">
+    <!-- 添加用户信息显示 -->
+    <div class="chat-message__user-info">
+      <div class="chat-message__avatar">
+        <img :src="message.role === 'user' ? icons.dark : icons.light" :alt="message.role" />
+      </div>
+      <div class="chat-message__name">
+        {{ message.role === 'user' ? '我' : 'AI助手' }}
+      </div>
+    </div>
+    <div class="chat-message__content">
+      <!-- 文件预览区域 - 显示用户上传的图片或文件 -->
+      <div v-if="message.files && message.files.length > 0" class="chat-message__files">
+        <div v-for="file in message.files" :key="file.url" class="chat-message__file">
+          <!-- 图片预览 - 直接显示图片内容 -->
+          <div v-if="file.type === 'image'" class="chat-message__file-image">
+            <img :src="file.url" :alt="file.name" />
+          </div>
+          <!-- 文件预览 - 显示文件信息和图标 -->
+          <div v-else class="chat-message__file-document">
+            <el-icon><Document /></el-icon>
+            <span class="chat-message__file-name">{{ file.name }}</span>
+            <span class="chat-message__file-size">{{ (file.size / 1024).toFixed(1) }}KB</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- 加载状态提示 - 显示AI正在思考中的状态 -->
+      <div v-if="message.loading && message.role === 'assistant'" class="chat-message__thinking">
+        <img :src="icons.loading" alt="loading" class="chat-message__thinking-icon" />
+        <span>内容生成中...</span>
+      </div>
+
+      <!-- 深度思考折叠控制按钮 - 控制推理内容的显示与隐藏 -->
+      <div v-if="message.reasoning_content" class="chat-message__reasoning-toggle" @click="toggleReasoning">
+        <img :src="icons.thinking" alt="thinking" class="chat-message__reasoning-toggle-icon" />
+        <span class="chat-message__reasoning-toggle-text">深度思考</span>
+        <el-icon class="chat-message__reasoning-toggle-arrow" :class="{ 'chat-message__reasoning-toggle-arrow--expanded': isReasoningExpanded }">
+          <ArrowDown />
+        </el-icon>
+      </div>
+
+      <!-- 推理内容区域 - 显示AI思考过程 -->
+      <div
+        v-if="message.reasoning_content && isReasoningExpanded"
+        class="chat-message__reasoning markdown-body"
+        v-html="renderedReasoning"
+      ></div>
+
+      <!-- 主要消息内容 - 显示实际消息文本 -->
+      <div class="chat-message__bubble markdown-body">
+        <template v-if="message.content">
+          <div v-if="message.role === 'assistant'" v-html="renderedContent"></div>
+          <div v-else>{{ message.content }}</div>
+        </template>
+      </div>
+    </div>
+
+    <!-- 操作按钮区域 - 仅在AI消息中显示 -->
+    <div v-if="message.role === 'assistant' && message.loading === false" class="chat-message__actions">
+      <!-- 重新生成按钮 - 仅在最后一条AI消息中显示 -->
+        <button
+          v-if="isLastAssistantMessage"
+        class="chat-message__action-button"
+          @click="handleRegenerate"
+          data-tooltip="重新生成"
+        >
+        <img :src="icons.regenerate" alt="regenerate" class="chat-message__action-button-icon" />
+        </button>
+
+      <!-- 复制按钮 -->
+      <button class="chat-message__action-button" @click="handleCopy" data-tooltip="复制">
+        <img :src="isCopied ? icons.success : icons.copy" alt="copy" class="chat-message__action-button-icon" />
+        </button>
+
+      <!-- 点赞按钮 -->
+      <button class="chat-message__action-button" @click="handleLike" data-tooltip="喜欢">
+        <img :src="isLiked ? icons.likeActive : icons.like" alt="like" class="chat-message__action-button-icon" />
+        </button>
+
+      <!-- 踩按钮 -->
+      <button class="chat-message__action-button" @click="handleDislike" data-tooltip="不喜欢">
+        <img :src="isDisliked ? icons.dislikeActive : icons.dislike" alt="dislike" class="chat-message__action-button-icon" />
+        </button>
+
+      <!-- Tokens信息展示 - 显示性能指标 -->
+      <span v-if="message.completion_tokens" class="chat-message__actions-info">
+          tokens: {{ message.completion_tokens }}, speed: {{ message.speed }} tokens/s
+        </span>
+    </div>
+  </div>
+</template>
+
+<style lang="scss" scoped>
+/*
+ * 聊天消息组件
+ * 支持用户和机器人两种身份消息
+ * 包含头像、用户名、消息内容和操作按钮
+ * 使用 BEM 命名规范
+ * 采用绿色主题 - 主色：#4CAF50，浅色：#E8F5E9，深色：#2E7D32
+ */
+
+.chat-message {
+  /* 消息容器基础样式 */
+  margin-bottom: 1.5rem; /* 增加消息间距 */
+  position: relative;
+  transition: transform 0.2s ease-out; /* 平滑过渡效果 */
+
+  /* 用户信息样式 */
+  &__user-info {
+    display: flex;
+    align-items: center;
+    margin-bottom: 8px;
+    gap: 8px;
+  }
+
+  &__avatar {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    overflow: hidden;
+    background-color: #f5f5f5;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    img {
+      width: 24px;
+      height: 24px;
+      object-fit: cover;
+    }
+  }
+
+  &__name {
+    font-size: 14px;
+    color: #666;
+    font-weight: 500;
+  }
+
+  /* 调整消息容器样式 */
+  &--user {
+    .chat-message__user-info {
+      flex-direction: row-reverse;
+    }
+  }
+
+  /* 用户身份的消息 - 靠右对齐 */
+  &--user {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+
+    /* 用户消息在加载完成时的动画效果 */
+    &.loaded {
+      animation: slideInRight 0.3s ease forwards;
+    }
+
+    .chat-message__content {
+      background-color: #e8f5e9; /* 浅绿色背景 */
+      color: #2e7d32; /* 深绿色文字提高对比度 */
+      border-radius: 16px 4px 16px 16px; /* 特殊圆角标识用户消息 */
+      box-shadow: 0 4px 8px rgba(76, 175, 80, 0.1); /* 绿色阴影 */
+
+      /* 悬停时的阴影变化 */
+      &:hover {
+        box-shadow: 0 6px 12px rgba(76, 175, 80, 0.15); /* 增强阴影效果 */
+      }
+
+      /* 用户消息的代码块样式增强 */
+      :deep(pre) {
+        background-color: rgba(76, 175, 80, 0.1); /* 半透明绿色背景 */
+        border-left: 4px solid #4caf50; /* 绿色左侧边框 */
+      }
+    }
+        }
+
+  /* 机器人身份的消息 - 靠左对齐 */
+  &--bot {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+
+    /* 机器人消息在加载完成时的动画效果 */
+    &.loaded {
+      animation: slideInLeft 0.3s ease forwards;
+          }
+
+    .chat-message__content {
+      background-color: #ffffff; /* 白色背景 */
+      color: #424242; /* 深灰色文字 */
+      border-radius: 4px 16px 16px 16px; /* 特殊圆角标识机器人消息 */
+      border-left: 3px solid #4caf50; /* 绿色左侧边框 */
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.08); /* 轻微阴影 */
+
+      /* 悬停时的阴影变化 */
+              &:hover {
+        box-shadow: 0 6px 12px rgba(0, 0, 0, 0.12); /* 增强阴影效果 */
+      }
+
+      /* 机器人消息的引用块样式 */
+      :deep(blockquote) {
+        border-left-color: #4caf50; /* 绿色引用条 */
+        background-color: #f1f8e9; /* 浅绿色背景 */
+      }
+    }
+      }
+
+  /* 等待响应的消息样式 */
+  &--waiting {
+    opacity: 0.7; /* 降低透明度 */
+  }
+
+  /* 消息内容区域 */
+  &__content {
+    padding: 12px 16px;
+    max-width: 90%;
+    word-break: break-word;
+    border-radius: 16px;
+    transition: all 0.3s ease;
+    line-height: 1.6;
+    font-size: 15px;
+    margin-top: 0.25rem;
+    position: relative;
+    }
+
+  /* 文件区域样式 */
+  &__files {
+    margin-bottom: 12px;
+      display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  /* 文件项样式 */
+  &__file {
+    position: relative;
+  }
+
+  /* 图片文件样式 */
+  &__file-image {
+    width: 70px;
+    height: 70px;
+    border-radius: 8px;
+    overflow: hidden;
+    border: 2px solid #e8f5e9;
+
+        img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+        }
+  }
+
+  /* 文档文件样式 */
+  &__file-document {
+    padding: 10px 14px;
+    background-color: #f1f8e9;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    border: 1px solid #c8e6c9;
+  }
+
+  /* 文件名称 */
+  &__file-name {
+    max-width: 150px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: #2e7d32;
+    font-weight: 500;
+  }
+
+  /* 文件大小 */
+  &__file-size {
+    color: #66bb6a;
+    font-size: 12px;
+      }
+
+  /* 思考中状态 */
+  &__thinking {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    margin-bottom: 8px;
+    color: #66bb6a;
+    font-size: 14px;
+
+    &-icon {
+      width: 16px;
+      height: 16px;
+      animation: spin 1s linear infinite;
+    }
+  }
+
+  /* 思考折叠按钮 */
+  &__reasoning-toggle {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    margin-bottom: 8px;
+    background-color: #f1f8e9;
+    border-radius: 8px;
+    cursor: pointer;
+    width: fit-content;
+    transition: background-color 0.2s;
+
+    &:hover {
+      background-color: #e8f5e9;
+    }
+
+    &-icon {
+      width: 16px;
+      height: 16px;
+    }
+
+    &-text {
+      color: #2e7d32;
+      font-size: 14px;
+      font-weight: 500;
+    }
+
+    &-arrow {
+      color: #4caf50;
+      transition: transform 0.2s;
+
+      &--expanded {
+        transform: rotate(180deg);
+      }
+    }
+  }
+
+  /* 推理内容区域 */
+  &__reasoning {
+    margin-bottom: 12px;
+    padding: 10px 14px;
+    background-color: #f9fdf9;
+    border-left: 3px solid #a5d6a7;
+    border-radius: 4px;
+    color: #555;
+    font-size: 14px;
+  }
+
+  /* 消息气泡 */
+  &__bubble {
+    width: 100%;
+  }
+
+  /* 操作按钮容器 */
+  &__actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 8px;
+    padding-left: 8px;
+
+    /* 消息操作按钮样式 */
+    &-info {
+      font-size: 12px;
+      color: #78909c;
+      padding: 3px 6px;
+      background-color: #f1f8e9;
+      border-radius: 4px;
+    }
+  }
+
+  /* 操作按钮基础样式 */
+  &__action-button {
+    width: 1.75rem;
+    height: 1.75rem;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    background-color: #e8f5e9;
+    border: 1px solid #c8e6c9;
+    transition: all 0.2s ease;
+
+    /* 按钮图标 */
+    &-icon {
+      width: 1rem;
+      height: 1rem;
+      transition: transform 0.2s ease;
+    }
+
+    /* 按钮悬停效果 */
+    &:hover {
+      background-color: #4caf50;
+      border-color: #4caf50;
+      transform: translateY(-2px);
+      box-shadow: 0 3px 8px rgba(76, 175, 80, 0.3);
+
+      .chat-message__action-button-icon {
+        transform: scale(1.1);
+        filter: brightness(2);
+      }
+    }
+
+    /* 按钮点击效果 */
+    &:active {
+      transform: translateY(0);
+      box-shadow: 0 1px 3px rgba(76, 175, 80, 0.2);
+    }
+  }
+
+}
+
+/* 旋转动画 - 用于加载图标 */
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* 消息加载动画 */
+@keyframes slideInRight {
+  from {
+    opacity: 0;
+    transform: translateX(1rem);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes slideInLeft {
+  from {
+    opacity: 0;
+    transform: translateX(-1rem);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+  .chat-message {
+    &__content {
+      max-width: 95%; /* 移动设备上增加宽度 */
+      padding: 10px 14px; /* 略微减小填充 */
+      font-size: 14px; /* 减小字体大小 */
+    }
+  }
+}
+</style>
