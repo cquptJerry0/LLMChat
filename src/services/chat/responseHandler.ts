@@ -1,7 +1,5 @@
-// src/services/chat/responseHandler.ts
 import { XStream, type XStreamOptions } from '@/utils/xstream'
 import { useStreamStore } from '@/stores/stream'
-import { StreamStatus } from '@/types/stream'
 import { calculateSpeed, formatSpeed } from '@/utils/speed'
 import type { MessageRole, MessageFile } from '@/types/message'
 import type { ToolCall } from '@/types/api'
@@ -10,7 +8,6 @@ import type {
   DeltaMessage
 } from '@/types/message'
 import type {
-  ChatCompletionResponse,
   ExtendedChatCompletionResponse,
   StreamHandlerOptions
 } from '@/types/api'

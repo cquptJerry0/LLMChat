@@ -3,15 +3,74 @@ import ChatInput from '@/components/ChatInput.vue'
 import ChatMessage from '@/components/ChatMessage.vue'
 import { Menu as IconMenu, Plus, Expand } from '@element-plus/icons-vue'
 import { computed, ref, watch, nextTick, onMounted, onUnmounted } from 'vue'
-import { useChatStore } from '@/stores/chat'
-import { messageHandler } from '@/utils/messageHandler'
-import { createChatCompletion } from '@/utils/api'
 import { useSettingStore } from '@/stores/setting'
 import SettingsPanel from '@/components/SettingsPanel.vue'
 import DialogEdit from '@/components/DialogEdit.vue'
 import ChatSidebar from '@/components/Sidebar.vue'
 import { useRouter } from 'vue-router'
 import { icons } from '@/constants/icons'
+import { useConversationControl } from '@/composables/useConversationControl'
+import { useStreamControl } from '@/composables/useStreamControl'
+import type { Message } from '@/types/chat'
+
+// =====================================================================
+// 数据逻辑层 - 使用 composables 处理所有业务逻辑
+// =====================================================================
+
+// 会话控制
+const {
+  currentMessages,
+  rootMessages,
+  isGenerating,
+  lastAssistantMessageId,
+  createConversation,
+  switchConversation,
+  deleteConversation,
+  sendMessage,
+  resendMessage,
+  getMessageTree,
+  restoreLastAssistantMessage
+} = useConversationControl()
+
+// 获取最后一条助手消息的流控制
+const streamControl = computed(() => {
+  if (lastAssistantMessageId) {
+    return useStreamControl(lastAssistantMessageId)
+  }
+  return null
+})
+
+// 发送消息处理函数
+const handleSend = async (messageContent: { content: string, files: any[] }) => {
+  try {
+    await sendMessage(messageContent.content)
+  } catch (error) {
+    console.error('Failed to send message:', error)
+  }
+}
+
+// 重新生成的处理函数
+const handleRegenerate = async () => {
+  try {
+    // 找到最后一条用户消息
+    const messages = currentMessages.value || []
+    const userMessage = [...messages].reverse()
+      .find((msg: Message | undefined) => msg?.role === 'user')
+
+    if (userMessage) {
+      await resendMessage(userMessage.id)
+    }
+  } catch (error) {
+    console.error('Failed to regenerate message:', error)
+  }
+}
+
+// 获取设置
+const settingStore = useSettingStore()
+
+// =====================================================================
+// UI 交互层 - 处理界面交互和视觉效果
+// =====================================================================
 
 // 移动端侧边栏显示状态
 const isSidebarVisible = ref(false)
@@ -20,26 +79,22 @@ const mouseLeaveTimeout = ref<number | null>(null)
 const enableMouseTracking = ref(true)  // 控制是否启用鼠标监听
 const sidebarMode = ref<'overlay' | 'below-header'>('overlay')
 
-// 获取聊天消息
-const chatStore = useChatStore()
-const currentMessages = computed(() => chatStore.currentMessages)
-const isLoading = computed(() => chatStore.isLoading)
-const settingStore = useSettingStore()
-
 // 获取消息容器
 const messagesContainer = ref<HTMLDivElement | null>(null)
+
+// 监听消息变化
 watch(
   currentMessages,
   () => {
-    // 消息变化时的处理，不再滚动
+    // 消息变化时的处理，可以添加滚动到底部等UI逻辑
   },
   { deep: true },
 )
 
 onMounted(() => {
   // 当没有对话时，默认新建一个对话
-  if (chatStore.conversations.length === 0) {
-    chatStore.createConversation()
+  if (!currentMessages.value || currentMessages.value.length === 0) {
+    createConversation('新对话')
   }
   document.addEventListener('mousemove', handleMouseMove)
 })
@@ -49,71 +104,21 @@ onUnmounted(() => {
   if (mouseEnterTimeout.value) clearTimeout(mouseEnterTimeout.value)
 })
 
-interface MessageContent {
-  content: string
-  files: any[]
-}
-
-// 发送消息
-const handleSend = async (messageContent: MessageContent) => {
-  try {
-    // 添加用户消息
-    chatStore.addMessage(
-      messageHandler.formatMessage('user', messageContent.content, '', messageContent.files),
-    )
-    // 添加空的助手消息
-    chatStore.addMessage(messageHandler.formatMessage('assistant', '', ''))
-
-    // 设置loading状态
-    chatStore.setIsLoading(true)
-    const lastMessage = chatStore.getLastMessage()
-    if (lastMessage) {
-      lastMessage.loading = true
-    }
-
-    // 调用API获取回复
-    const messages = chatStore.currentMessages.map(({ role, content }) => ({ role, content }))
-    const response = await createChatCompletion(messages)
-
-    // 使用封装的响应处理函数
-    await messageHandler.handleResponse(
-      response,
-      settingStore.settings.stream,
-      (content, reasoning_content, tokens, speed) => {
-        chatStore.updateLastMessage(content, reasoning_content, tokens, speed)
-      },
-    )
-  } catch (error) {
-    console.error('Failed to send message:', error)
-    chatStore.updateLastMessage('抱歉，发生了一些错误，请稍后重试。', '', 0, '0')
-  } finally {
-    // 重置loading状态
-    chatStore.setIsLoading(false)
-    const lastMessage = chatStore.getLastMessage()
-    if (lastMessage) {
-      lastMessage.loading = false
-    }
-  }
-}
-
-// 重新生成的处理函数
-const handleRegenerate = async () => {
-  try {
-    // 获取最后一条用户消息
-    const lastUserMessage = chatStore.currentMessages[chatStore.currentMessages.length - 2]
-    // 使用 splice 删除最后两个元素
-    chatStore.currentMessages.splice(-2, 2)
-    await handleSend({ content: lastUserMessage.content, files: lastUserMessage.files })
-  } catch (error) {
-    console.error('Failed to regenerate message:', error)
-  }
-}
-
 // 添加抽屉引用
 const settingDrawer = ref<InstanceType<typeof SettingsPanel>>()
 
 // 获取当前对话标题
-const currentTitle = computed(() => chatStore.currentConversation?.title || 'LLM Chat')
+const currentTitle = computed(() => {
+  const messages = currentMessages.value || []
+  if (messages.length > 0) {
+    const firstMessage = messages[0]
+    if (firstMessage) {
+      return firstMessage.conversationId || 'LLM Chat'
+    }
+  }
+  return 'LLM Chat'
+})
+
 // 格式化标题
 const formatTitle = (title: string) => {
   return title.length > 4 ? title.slice(0, 4) + '...' : title
@@ -132,7 +137,7 @@ const handleBack = async () => {
 
 // 处理新建对话
 const handleNewChat = () => {
-  chatStore.createConversation()
+  createConversation('新对话')
 }
 
 // 显示侧边栏
@@ -201,7 +206,7 @@ const handleMouseMove = (e: MouseEvent) => {
             <h1 class="chat-view__title">{{ formatTitle(currentTitle) }}</h1>
             <button
               class="chat-view__edit-btn"
-              @click="dialogEdit.openDialog(chatStore.currentConversationId, 'edit')"
+              @click="dialogEdit.openDialog(currentTitle, 'edit')"
             >
               <img :src="icons.edit" alt="edit" />
             </button>
@@ -224,16 +229,17 @@ const handleMouseMove = (e: MouseEvent) => {
 
       <!-- 消息容器，显示对话消息 -->
       <div class="chat-view__messages" ref="messagesContainer">
-        <template v-if="currentMessages.length > 0">
-          <ChatMessage
-            v-for="(message, index) in currentMessages"
-            :key="message.id"
-            :message="message"
-            :is-last-assistant-message="
-              index === currentMessages.length - 1 && message.role === 'assistant'
-            "
-            @regenerate="handleRegenerate"
-          />
+        <template v-if="currentMessages && currentMessages.length > 0">
+          <template v-for="(message, index) in currentMessages" :key="message?.id">
+            <ChatMessage
+              v-if="message"
+              :message="message"
+              :is-last-assistant-message="
+                index === currentMessages.length - 1 && message.role === 'assistant'
+              "
+              @regenerate="handleRegenerate"
+            />
+          </template>
         </template>
         <div v-else class="chat-view__empty">
           <div class="chat-view__empty-content">
@@ -246,7 +252,7 @@ const handleMouseMove = (e: MouseEvent) => {
 
       <!-- 聊天输入框 -->
       <div class="chat-view__input">
-        <ChatInput :loading="isLoading" @send="handleSend" />
+        <ChatInput :loading="isGenerating" @send="handleSend" />
       </div>
 
       <!-- 设置面板 -->

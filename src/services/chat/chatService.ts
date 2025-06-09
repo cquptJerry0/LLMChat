@@ -1,4 +1,3 @@
-// src/services/chat/chatService.ts
 import { apiClient } from '../base/apiClient'
 import { useSettingStore } from '@/stores/setting'
 import { useStreamStore } from '@/stores/stream'
@@ -66,7 +65,7 @@ export interface ChatServiceDependencies {
 }
 
 /**
- * 聊天服务实现
+ * 聊天服务实现, implements表示实现接口
  */
 class ChatService implements IChatService {
   private abortControllers: Map<string, AbortController> = new Map();
@@ -285,7 +284,7 @@ class ChatService implements IChatService {
   }
 
   /**
-   * 处理业务错误（私有方法）
+   * 处理错误
    */
   private handleBusinessError(error: unknown, messageId?: string): void {
     if (!messageId) return;
@@ -300,13 +299,13 @@ class ChatService implements IChatService {
       errorMessage = `解析错误: ${error.message}`;
       console.error(`[${errorType}] Response parse error:`, error);
     }
-    // 第二层：业务逻辑错误 (Business Layer)
+    // 业务逻辑错误 (Business Layer)
     else if (error instanceof BusinessError) {
       errorType = ErrorType.BUSINESS;
       errorMessage = error.message;
       console.error(`[${errorType}] Business error (${error.code}):`, error);
     }
-    // 第三层：API/网络错误 (Network Layer)
+    // API/网络错误 (Network Layer)
     else if (error instanceof ApiError) {
       errorType = ErrorType.NETWORK;
       errorMessage = error.message;
@@ -373,5 +372,11 @@ class ChatService implements IChatService {
   }
 }
 
+
 // 导出单例实例
-export const chatService = new ChatService();
+export const chatService = new ChatService({
+  responseHandler,
+  getStreamStore: useStreamStore,
+  getSettingStore: useSettingStore
+});
+
