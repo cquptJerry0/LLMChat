@@ -2,7 +2,7 @@
 import ChatInput from '@/components/ChatInput.vue'
 import ChatMessage from '@/components/ChatMessage.vue'
 import { Menu as IconMenu, Plus, Expand } from '@element-plus/icons-vue'
-import { computed, ref, watch, nextTick, onMounted, onUnmounted } from 'vue'
+import { computed, ref, watch, provide, nextTick, onMounted, onUnmounted } from 'vue'
 import { useSettingStore } from '@/stores/setting'
 import SettingsPanel from '@/components/SettingsPanel.vue'
 import DialogEdit from '@/components/DialogEdit.vue'
@@ -39,6 +39,22 @@ const streamControl = computed(() => {
   }
   return null
 })
+
+// 提供给子组件
+provide('conversationControl', {
+  currentMessages,
+  rootMessages,
+  isGenerating,
+  createConversation,
+  switchConversation,
+  deleteConversation,
+  sendMessage,
+  resendMessage,
+  getMessageTree
+})
+
+// 提供获取流控制的函数
+provide('getStreamControl', (messageId: string) => useStreamControl(messageId))
 
 // 发送消息处理函数
 const handleSend = async (messageContent: { content: string, files: any[] }) => {
@@ -82,11 +98,14 @@ const sidebarMode = ref<'overlay' | 'below-header'>('overlay')
 // 获取消息容器
 const messagesContainer = ref<HTMLDivElement | null>(null)
 
-// 监听消息变化
+// 监听消息变化，自动滚动到底部
 watch(
   currentMessages,
-  () => {
-    // 消息变化时的处理，可以添加滚动到底部等UI逻辑
+  async () => {
+    await nextTick()
+    if (messagesContainer.value) {
+      messagesContainer.value.scrollTop = messagesContainer.value.scrollHeight
+    }
   },
   { deep: true },
 )
@@ -95,6 +114,9 @@ onMounted(() => {
   // 当没有对话时，默认新建一个对话
   if (!currentMessages.value || currentMessages.value.length === 0) {
     createConversation('新对话')
+  } else {
+    // 尝试恢复最后一条未完成的助手消息
+    restoreLastAssistantMessage()
   }
   document.addEventListener('mousemove', handleMouseMove)
 })
@@ -109,14 +131,14 @@ const settingDrawer = ref<InstanceType<typeof SettingsPanel>>()
 
 // 获取当前对话标题
 const currentTitle = computed(() => {
-  const messages = currentMessages.value || []
-  if (messages.length > 0) {
-    const firstMessage = messages[0]
-    if (firstMessage) {
-      return firstMessage.conversationId || 'LLM Chat'
+  if (currentMessages.value && currentMessages.value.length > 0) {
+    // 尝试从第一条消息获取对话ID
+    const firstMessage = currentMessages.value[0]
+    if (firstMessage && firstMessage.conversationId) {
+      return firstMessage.conversationId
     }
   }
-  return 'LLM Chat'
+  return '新对话'
 })
 
 // 格式化标题
@@ -206,7 +228,7 @@ const handleMouseMove = (e: MouseEvent) => {
             <h1 class="chat-view__title">{{ formatTitle(currentTitle) }}</h1>
             <button
               class="chat-view__edit-btn"
-              @click="dialogEdit.openDialog(currentTitle, 'edit')"
+              @click="dialogEdit?.openDialog(currentTitle, 'edit')"
             >
               <img :src="icons.edit" alt="edit" />
             </button>
@@ -215,7 +237,7 @@ const handleMouseMove = (e: MouseEvent) => {
 
         <div class="chat-view__header-right">
           <el-tooltip content="设置" placement="top">
-            <button class="chat-view__action-btn" @click="settingDrawer.openDrawer()">
+            <button class="chat-view__action-btn" @click="settingDrawer?.openDrawer()">
               <img :src="icons.settings" alt="settings" />
             </button>
           </el-tooltip>

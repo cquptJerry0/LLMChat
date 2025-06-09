@@ -1,5 +1,3 @@
-import axios, { AxiosError } from 'axios'
-
 export interface ApiErrorResponse {
   message?: string;
   code?: string;
@@ -40,24 +38,20 @@ export class BusinessError extends Error {
  * 专门处理网络层面的错误，如连接失败、超时等
  */
 export function handleApiError(error: unknown): ApiError {
-  if (axios.isAxiosError(error)) {
-    const axiosError = error as AxiosError<ApiErrorResponse>
+  // 处理 fetch 相关错误
+  if (error instanceof TypeError && error.message.includes('fetch')) {
+    // 网络错误（如请求失败）
+    return new ApiError('网络连接失败，请检查网络', undefined, 'NETWORK_ERROR');
+  }
 
-    if (axiosError.response) {
-      // 服务器返回了错误状态码
-      const status = axiosError.response.status
-      const data = axiosError.response.data
+  // 处理已经是 ApiError 的情况
+  if (error instanceof ApiError) {
+    return error;
+  }
 
-      return new ApiError(
-        data?.message || `请求失败 (${status})`,
-        status,
-        data?.code,
-        axiosError.response
-      )
-    } else if (axiosError.request) {
-      // 请求已发送但未收到响应
-      return new ApiError('网络连接失败，请检查网络', undefined, 'NETWORK_ERROR')
-    }
+  // 处理 AbortError（请求被中断）
+  if (error instanceof DOMException && error.name === 'AbortError') {
+    return new ApiError('请求已取消', undefined, 'REQUEST_ABORTED');
   }
 
   // 其他错误
@@ -66,14 +60,14 @@ export function handleApiError(error: unknown): ApiError {
       error.message,
       undefined,
       'UNKNOWN_ERROR'
-    )
+    );
   }
 
   return new ApiError(
     '未知错误',
     undefined,
     'UNKNOWN_ERROR'
-  )
+  );
 }
 
 /**

@@ -4,6 +4,7 @@ import { useStreamStore } from '@/stores/stream'
 import { ApiError, BusinessError, BusinessErrorCode, createBusinessError } from '../base/errorHandler'
 import { calculateSpeed } from '@/utils/speed'
 import { responseHandler, ResponseParseError, IResponseHandler } from './responseHandler'
+import type { ResumeInfo } from '@/types/stream'
 import type {
   ChatMessage,
   ChatCompletionParams,
@@ -36,9 +37,10 @@ export interface IChatService {
     options?: {
       messageId?: string,
       signal?: AbortSignal,
-      updateCallback?: UpdateCallback
+      updateCallback?: UpdateCallback,
+      resumeInfo?: ResumeInfo
     }
-  ): Promise<ExtendedChatCompletionResponse | Response>;
+  ): Promise<ExtendedChatCompletionResponse | any>;
 
   /**
    * 恢复之前中断的聊天完成请求
@@ -47,7 +49,7 @@ export interface IChatService {
     messages: ChatMessage[],
     messageId: string,
     updateCallback: UpdateCallback
-  ): Promise<Response>;
+  ): Promise<any>;
 
   /**
    * 取消请求
@@ -90,13 +92,15 @@ class ChatService implements IChatService {
     options?: {
       messageId?: string,
       signal?: AbortSignal,
-      updateCallback?: UpdateCallback
+      updateCallback?: UpdateCallback,
+      resumeInfo?: ResumeInfo
     }
-  ): Promise<ExtendedChatCompletionResponse | Response> {
+  ): Promise<ExtendedChatCompletionResponse | any> {
     const settingStore = this.getSettingStore();
     const streamStore = this.getStreamStore();
     const messageId = options?.messageId;
     const updateCallback = options?.updateCallback;
+    const resumeInfo = options?.resumeInfo;
 
     try {
       // 参数验证
@@ -109,7 +113,10 @@ class ChatService implements IChatService {
 
       // 如果提供了messageId，启动流状态跟踪
       if (messageId && settingStore.settings.stream) {
-        streamStore.startStream(messageId);
+        if (!resumeInfo) {
+          // 新的流
+          streamStore.startStream(messageId);
+        }
       }
 
       // 构建请求参数
@@ -130,25 +137,40 @@ class ChatService implements IChatService {
 
       const startTime = Date.now();
 
+      // 确保使用 AbortController 以便能够取消请求
+      let abortController: AbortController | undefined;
+
+      if (messageId) {
+        // 检查是否已经有流控制器
+        const existingController = streamStore.streams.get(`stream_${messageId}`)?.abortController;
+
+        if (existingController) {
+          abortController = existingController;
+        } else {
+          // 创建新的控制器
+          abortController = new AbortController();
+
+          // 如果是流式响应且有messageId，更新流控制器
+          if (settingStore.settings.stream) {
+            const streamState = streamStore.getStreamState(messageId);
+            if (streamState) {
+              streamState.abortController = abortController;
+            }
+          }
+        }
+
+        // 保存 AbortController 以便后续取消
+        console.log(`保存 AbortController: ${messageId}`);
+        this.abortControllers.set(messageId, abortController);
+      }
+
       // 创建请求配置
       const config = {
         url: '/chat/completions',
         data: payload,
-        signal: options?.signal || (
-          messageId ?
-            streamStore.streams.get(`stream_${messageId}`)?.abortController?.signal :
-            undefined
-        ),
-        responseType: settingStore.settings.stream ? 'stream' : 'json'
+        signal: options?.signal || (abortController ? abortController.signal : undefined),
+        responseType: settingStore.settings.stream ? 'text' : 'json'
       } as const;
-
-      // 保存abortController便于后续取消
-      if (messageId && streamStore.streams.get(`stream_${messageId}`)?.abortController) {
-        this.abortControllers.set(
-          messageId,
-          streamStore.streams.get(`stream_${messageId}`)!.abortController!
-        );
-      }
 
       // 发送请求
       const response = await apiClient.post<ChatCompletionResponse | Response>(
@@ -164,16 +186,45 @@ class ChatService implements IChatService {
       if (settingStore.settings.stream) {
         const streamResponse = response as Response;
 
+        // 检查响应是否有效
+        if (!streamResponse || !streamResponse.body) {
+          const headers: Record<string, string> = {};
+          if (streamResponse?.headers) {
+            streamResponse.headers.forEach((value, key) => {
+              headers[key] = value;
+            });
+          }
+
+          console.error('无效的流式响应:', {
+            status: streamResponse?.status,
+            statusText: streamResponse?.statusText,
+            headers,
+            hasBody: !!streamResponse?.body
+          });
+          throw new Error('无效的流式响应');
+        }
+
         // 如果提供了updateCallback，处理流式响应
         if (updateCallback && messageId) {
           const streamOptions: StreamHandlerOptions = {
             signal: config.signal,
-            messageId
+            messageId,
+            resumeInfo
           };
 
+          console.log('开始处理流式响应', {
+            status: streamResponse.status,
+            statusText: streamResponse.statusText,
+            contentType: streamResponse.headers.get('content-type'),
+            hasBody: !!streamResponse.body,
+            messageId,
+            hasResumeInfo: !!resumeInfo
+          });
+
           // 异步处理流式响应，不等待完成
-          this.handleStreamResponse(streamResponse.clone(), updateCallback, streamOptions, messageId)
+          this.handleStreamResponse(streamResponse, updateCallback, streamOptions, messageId)
             .catch(error => {
+              console.error('处理流式响应出错:', error);
               this.handleBusinessError(error, messageId);
             });
         }
@@ -215,53 +266,62 @@ class ChatService implements IChatService {
     messages: ChatMessage[],
     messageId: string,
     updateCallback: UpdateCallback
-  ): Promise<Response> {
+  ): Promise<any> {
+    console.log('resumeChatCompletion', { messageId });
+
     const streamStore = this.getStreamStore();
+    const stream = streamStore.getStreamState(messageId);
 
-    try {
-      const signal = streamStore.resumeStream(messageId);
-
-      if (!signal) {
-        throw createBusinessError(
-          BusinessErrorCode.INVALID_STATE,
-          '无法恢复: 消息不在暂停状态'
-        );
-      }
-
-      const response = await this.createChatCompletion(
-        messages,
-        { signal, messageId, updateCallback }
+    if (!stream) {
+      throw createBusinessError(
+        BusinessErrorCode.INVALID_STATE,
+        '找不到要恢复的流'
       );
-
-      if (response instanceof Response) {
-        return response;
-      } else {
-        throw createBusinessError(
-          BusinessErrorCode.INVALID_RESPONSE,
-          '预期流式响应但收到普通响应'
-        );
-      }
-    } catch (error) {
-      this.handleBusinessError(error, messageId);
-      throw error;
     }
+
+    // 获取恢复信息
+    const resumeResult = streamStore.resumeStream(messageId);
+    if (!resumeResult) {
+      throw createBusinessError(
+        BusinessErrorCode.INVALID_STATE,
+        '无法恢复流'
+      );
+    }
+
+    // 使用恢复信息创建新请求
+    return this.createChatCompletion(messages, {
+      messageId,
+      signal: resumeResult.signal,
+      updateCallback,
+      resumeInfo: resumeResult.resumeInfo
+    });
   }
 
   /**
    * 取消请求
    */
   cancelRequest(messageId: string): boolean {
+    console.log(`尝试取消请求: ${messageId}`, this.abortControllers.has(messageId))
     const controller = this.abortControllers.get(messageId);
     if (controller) {
-      controller.abort();
-      this.abortControllers.delete(messageId);
-      return true;
+      console.log('找到AbortController，执行中止操作');
+      try {
+        controller.abort();
+        this.abortControllers.delete(messageId);
+        console.log('成功中止请求');
+        return true;
+      } catch (error) {
+        console.error('中止请求时出错:', error);
+        return false;
+      }
     }
+
+    console.log('未找到请求的AbortController');
     return false;
   }
 
   /**
-   * 处理流式响应（私有方法）
+   * 处理流式响应
    */
   private async handleStreamResponse(
     response: Response,
@@ -269,14 +329,13 @@ class ChatService implements IChatService {
     options: StreamHandlerOptions,
     messageId: string
   ): Promise<void> {
-    try {
-      await this.responseHandler.handleStreamResponse(response, updateCallback, options);
+    console.log('chatService.handleStreamResponse', { messageId });
 
-      // 成功完成流处理，更新状态
-      const streamStore = this.getStreamStore();
-      if (messageId) {
-        streamStore.completeStream(messageId);
-      }
+    try {
+      await this.responseHandler.handleStreamResponse(response, updateCallback, {
+        ...options,
+        messageId
+      });
     } catch (error) {
       // 处理响应解析错误
       this.handleBusinessError(error, messageId);

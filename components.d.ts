@@ -7,7 +7,11 @@ export {}
 /* prettier-ignore */
 declare module 'vue' {
   export interface GlobalComponents {
+    AIChatContainer: typeof import('./src/components/AIChatContainer.vue')['default']
+    Bubble: typeof import('./src/components/Bubble.vue')['default']
+    BubbleList: typeof import('./src/components/BubbleList.vue')['default']
     ChatInput: typeof import('./src/components/ChatInput.vue')['default']
+    ChatInputAdapter: typeof import('./src/components/ChatInputAdapter.vue')['default']
     ChatMessage: typeof import('./src/components/ChatMessage.vue')['default']
     ChatView: typeof import('./src/components/ChatView.vue')['default']
     Conversations: typeof import('./src/components/Conversations.vue')['default']
@@ -32,6 +36,7 @@ declare module 'vue' {
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']
     SearchDialog: typeof import('./src/components/SearchDialog.vue')['default']
+    Sender: typeof import('./src/components/Sender.vue')['default']
     SettingsPanel: typeof import('./src/components/SettingsPanel.vue')['default']
     Sidebar: typeof import('./src/components/Sidebar.vue')['default']
   }

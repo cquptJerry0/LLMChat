@@ -1,11 +1,14 @@
-<script setup>
-import { ref, nextTick } from 'vue'
+<script setup lang="ts">
+import { ref, nextTick, inject } from 'vue'
 import { Document } from '@element-plus/icons-vue'
 import { icons } from '@/constants/icons'
 
+// 注入对话控制
+const conversationControl: any = inject('conversationControl')
+
 // 输入框的值，使用 ref 实现响应式
 const inputValue = ref('')
-const fileList = ref([]) // 存储上传的文件列表
+const fileList = ref<any[]>([]) // 存储上传的文件列表
 
 // 定义组件的 props，接收 loading 状态
 const props = defineProps({
@@ -22,31 +25,40 @@ const emit = defineEmits(['send'])
 const inputRef = ref(null)
 
 // 处理发送消息的方法
-const handleSend = () => {
+const handleSend = async () => {
   if (props.loading || (!inputValue.value.trim() && fileList.value.length === 0)) {
     return
   }
 
-  // 发送消息
-  emit('send', {
-    content: inputValue.value.trim(),
-    files: fileList.value
-  })
+  try {
+    // 使用 conversationControl 发送消息
+    if (conversationControl) {
+      await conversationControl.sendMessage(inputValue.value.trim())
+    }
 
-  // 清空输入框和文件列表
-  inputValue.value = ''
-  fileList.value = []
+    // 触发事件，让父组件知道消息已发送
+    emit('send', {
+      content: inputValue.value.trim(),
+      files: fileList.value
+    })
+
+    // 清空输入框和文件列表
+    inputValue.value = ''
+    fileList.value = []
+  } catch (error) {
+    console.error('Failed to send message:', error)
+  }
 }
 
 // 处理换行的方法（Shift + Enter）
-const handleNewline = (e) => {
+const handleNewline = (e: KeyboardEvent) => {
   e.preventDefault() // 阻止默认的 Enter 发送行为
   inputValue.value += '\n' // 在当前位置添加换行符
 
   // 使用 nextTick 确保在 DOM 更新后设置光标位置
   nextTick(() => {
     if (inputRef.value) {
-      const textarea = inputRef.value.$el.querySelector('textarea')
+      const textarea = (inputRef.value as any).$el.querySelector('textarea')
       if (textarea) {
         textarea.focus()
       }
@@ -54,13 +66,22 @@ const handleNewline = (e) => {
   })
 }
 
+// 定义文件对象类型
+interface FileObject {
+  name: string;
+  size: number;
+  type: 'image' | 'document';
+  url: string;
+  raw: File;
+}
+
 // 处理文件上传
-const handleFileUpload = (file) => {
+const handleFileUpload = (file: any) => {
   // 检查文件类型
   const isImage = file.raw.type.startsWith('image/')
 
   // 创建文件对象
-  const fileObj = {
+  const fileObj: FileObject = {
     name: file.name,
     size: file.size,
     type: isImage ? 'image' : 'document',
@@ -75,7 +96,7 @@ const handleFileUpload = (file) => {
 }
 
 // 移除文件
-const handleFileRemove = (file) => {
+const handleFileRemove = (file: FileObject) => {
   const index = fileList.value.findIndex(f => f.url === file.url)
   if (index !== -1) {
     // 释放 URL 对象

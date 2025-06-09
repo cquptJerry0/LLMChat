@@ -1,4 +1,4 @@
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, ComputedRef, Ref } from 'vue'
 import { useStreamStore } from '@/stores/stream'
 import { useNormalizedChatStore } from '@/stores/normalizedChat'
 import { chatService } from '@/services/chat/chatService'
@@ -10,19 +10,20 @@ const STORAGE_KEY_PREFIX = 'stream_state_'
 
 export interface StreamControl {
   // 状态
-  isPaused: boolean;
-  isStreaming: boolean;
-  isError: boolean;
-  errorMessage: string | undefined;
-  progress: {
+  isPaused: ComputedRef<boolean>;
+  isStreaming: ComputedRef<boolean>;
+  isError: ComputedRef<boolean>;
+  errorMessage: ComputedRef<string | undefined>;
+  progress: Ref<{
     content: string;
     reasoning_content: string;
     completion_tokens: number;
     speed: number;
-  };
+  }>;
+  isIncomplete: ComputedRef<boolean>;
 
   // 控制方法
-  pause: () => void;
+  pause: () => AbortController | null;
   resume: (updateCallback: UpdateCallback) => Promise<void>;
   cancel: () => void;
 
@@ -30,9 +31,13 @@ export interface StreamControl {
   saveStreamState: () => void;
   restoreStreamState: () => boolean;
   clearStreamState: () => void;
+
+  // 状态自动保存
+  setupAutoSave: () => number | null;
+  cleanupAutoSave: (intervalId: number | null) => void;
 }
 
-export function useStreamControl(messageId: string) {
+export function useStreamControl(messageId: string): StreamControl {
   const streamStore = useStreamStore()
   const chatStore = useNormalizedChatStore()
   const streamId = `stream_${messageId}`
@@ -51,6 +56,11 @@ export function useStreamControl(messageId: string) {
   const isStreaming = computed(() => streamState.value?.status === 'streaming')
   const isError = computed(() => streamState.value?.status === 'error')
   const errorMessage = computed(() => streamState.value?.error)
+
+  // 检查流是否未完成
+  const isIncomplete = computed(() => {
+    return streamState.value?.status === 'streaming' || streamState.value?.status === 'paused'
+  })
 
   // 存储流状态到localStorage
   const saveStreamState = () => {
@@ -133,9 +143,16 @@ export function useStreamControl(messageId: string) {
   // 暂停生成
   const pause = () => {
     if (isStreaming.value) {
-      streamStore.pauseStream(messageId)
-      saveStreamState() // 保存当前状态
+      // 暂停流并获取当前的 AbortController
+      const currentController = streamStore.pauseStream(messageId)
+
+      // 保存当前状态
+      saveStreamState()
+
+      // 返回控制器，让调用者决定是否需要中止当前请求
+      return currentController instanceof AbortController ? currentController : null
     }
+    return null
   }
 
   // 恢复生成
@@ -157,14 +174,24 @@ export function useStreamControl(messageId: string) {
         )
       } catch (error) {
         console.error('Failed to resume stream:', error)
+        streamStore.setStreamError(messageId, error instanceof Error ? error.message : '恢复流失败')
       }
     }
   }
 
   // 取消生成
   const cancel = () => {
-    chatService.cancelRequest(messageId)
-    // 可以选择是否清除状态
+    // 确保取消网络请求
+    console.log('取消生成:', messageId)
+    const result = chatService.cancelRequest(messageId)
+    console.log('取消请求结果:', result)
+
+    // 更新状态
+    if (streamState.value?.status === 'streaming' || streamState.value?.status === 'paused') {
+      streamStore.completeStream(messageId)
+    }
+
+    // 清除状态
     // clearStreamState()
   }
 
@@ -189,47 +216,31 @@ export function useStreamControl(messageId: string) {
     return history
   }
 
-  // 自动保存状态（当流在进行中）
-  const autoSaveInterval = ref<number | null>(null)
-
   // 设置自动保存
   const setupAutoSave = () => {
-    // 清除之前的定时器
-    if (autoSaveInterval.value) {
-      clearInterval(autoSaveInterval.value)
-    }
-
     // 创建新的定时器，每秒保存一次状态
-    autoSaveInterval.value = window.setInterval(() => {
+    return window.setInterval(() => {
       if (isStreaming.value) {
         saveStreamState()
       } else {
         // 如果流已经完成或出错，清除定时器
-        if (autoSaveInterval.value && !isPaused.value) {
-          clearInterval(autoSaveInterval.value)
-          autoSaveInterval.value = null
-
+        if (!isPaused.value) {
           // 流完成时保存最终状态
           if (!isError.value) {
             saveStreamState()
           }
+          return null
         }
       }
     }, 1000)
   }
 
-  // 组件挂载时尝试恢复状态并设置自动保存
-  onMounted(() => {
-    restoreStreamState()
-    setupAutoSave()
-  })
-
-  // 组件卸载时清除定时器
-  onUnmounted(() => {
-    if (autoSaveInterval.value) {
-      clearInterval(autoSaveInterval.value)
+  // 清理自动保存
+  const cleanupAutoSave = (intervalId: number | null) => {
+    if (intervalId) {
+      clearInterval(intervalId)
     }
-  })
+  }
 
   return {
     // 状态
@@ -237,7 +248,8 @@ export function useStreamControl(messageId: string) {
     isStreaming,
     isError,
     errorMessage,
-    progress: progress.value,
+    progress,
+    isIncomplete,
 
     // 控制方法
     pause,
@@ -247,6 +259,10 @@ export function useStreamControl(messageId: string) {
     // 流状态持久化
     saveStreamState,
     restoreStreamState,
-    clearStreamState
+    clearStreamState,
+
+    // 状态自动保存
+    setupAutoSave,
+    cleanupAutoSave
   }
 }

@@ -107,6 +107,19 @@ export function useConversationControl() {
       const streamControl = useStreamControl(messageId)
       const restored = streamControl.restoreStreamState()
 
+      // 如果流是未完成状态，设置生成中状态
+      if (restored && streamControl.isIncomplete.value) {
+        isGenerating.value = true
+        // 创建新的流状态（如果不存在）
+        if (!streamStore.streams.get(`stream_${messageId}`)) {
+          streamStore.startStream(messageId)
+          // 如果是暂停状态，设置为暂停
+          if (streamControl.isPaused.value) {
+            streamStore.pauseStream(messageId)
+          }
+        }
+      }
+
       return restored
     } catch (error) {
       console.error('Failed to restore last assistant message:', error)

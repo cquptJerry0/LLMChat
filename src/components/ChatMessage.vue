@@ -1,13 +1,25 @@
-<script setup>
-import { computed, ref, onMounted, onUnmounted } from 'vue'
+<script setup lang="ts">
+import { computed, ref, inject, onMounted, onUnmounted } from 'vue'
 import { renderMarkdown } from '@/utils/markdown'
 import { Document, ArrowDown } from '@element-plus/icons-vue'
 import { icons } from '@/constants/icons'
+import type { Message } from '@/types/chat'
+
+// 注入对话控制和流控制
+const conversationControl: any = inject('conversationControl')
+const getStreamControl: any = inject('getStreamControl')
 
 // 定义props
 const props = defineProps({
   message: {
-    type: Object,
+    type: Object as () => Message & {
+      files?: Array<{
+        type: string;
+        url: string;
+        name: string;
+        size: number;
+      }>;
+    },
     required: true,
   },
   isLastAssistantMessage: {
@@ -15,6 +27,44 @@ const props = defineProps({
     default: false,
   },
 })
+
+// 扩展 icons 类型以添加缺失的属性
+const extendedIcons: any = icons
+
+// 获取消息的流控制
+const streamControl = computed(() => {
+  if (getStreamControl && props.message.role === 'assistant') {
+    return getStreamControl(props.message.id)
+  }
+  return null
+})
+
+// 流状态
+const isPaused = computed(() => streamControl.value?.isPaused || false)
+const isStreaming = computed(() => streamControl.value?.isStreaming || false)
+const isError = computed(() => streamControl.value?.isError || false)
+
+// 流控制方法
+const handlePause = () => {
+  if (streamControl.value) {
+    streamControl.value.pause()
+  }
+}
+
+const handleResume = () => {
+  if (streamControl.value) {
+    streamControl.value.resume((content: string, reasoning_content: string, completion_tokens: number, speed: number) => {
+      // 回调函数由 useStreamControl 内部处理
+      console.log('Message updating:', content)
+    })
+  }
+}
+
+const handleCancel = () => {
+  if (streamControl.value) {
+    streamControl.value.cancel()
+  }
+}
 
 // 点赞和踩的状态
 const isLiked = ref(false)
@@ -67,9 +117,14 @@ const handleRegenerate = () => {
 }
 
 // 处理代码块的复制
-const handleCodeCopy = async (event) => {
-  const codeBlock = event.target.closest('.code-block')
-  const code = codeBlock.querySelector('code').textContent
+const handleCodeCopy = async (event: Event) => {
+  const codeBlock = (event.target as HTMLElement).closest('.code-block')
+  if (!codeBlock) return
+
+  const codeElement = codeBlock.querySelector('code')
+  if (!codeElement) return
+
+  const code = codeElement.textContent || ''
 
   try {
     await navigator.clipboard.writeText(code)
@@ -80,16 +135,23 @@ const handleCodeCopy = async (event) => {
 }
 
 // 处理代码块主题切换
-const handleThemeToggle = (event) => {
-  const codeBlock = event.target.closest('.code-block')
-  const themeIcon = event.target.closest('[data-action="theme"]').querySelector('img')
+const handleThemeToggle = (event: Event) => {
+  const codeBlock = (event.target as HTMLElement).closest('.code-block')
+  if (!codeBlock) return
+
+  const themeIconElement = (event.target as HTMLElement).closest('[data-action="theme"]')?.querySelector('img')
+  if (!themeIconElement) return
+
   const isDark = codeBlock.classList.contains('dark-theme')
 
   // 切换代码块主题
   codeBlock.classList.toggle('dark-theme')
 
   // 切换图标
-  themeIcon.src = isDark ? themeIcon.dataset.themeLight : themeIcon.dataset.themeDark
+  const themeIcon = themeIconElement as HTMLImageElement
+  if (themeIcon.dataset.themeLight && themeIcon.dataset.themeDark) {
+    themeIcon.src = isDark ? themeIcon.dataset.themeLight : themeIcon.dataset.themeDark
+  }
 }
 
 // 修改事件监听的方式
@@ -103,13 +165,13 @@ onMounted(() => {
           const copyBtn = block.querySelector('[data-action="copy"]')
           const themeBtn = block.querySelector('[data-action="theme"]')
 
-          if (copyBtn && !copyBtn._hasListener) {
+          if (copyBtn && !(copyBtn as any)._hasListener) {
             copyBtn.addEventListener('click', handleCodeCopy)
-            copyBtn._hasListener = true
+            ;(copyBtn as any)._hasListener = true
           }
-          if (themeBtn && !themeBtn._hasListener) {
+          if (themeBtn && !(themeBtn as any)._hasListener) {
             themeBtn.addEventListener('click', handleThemeToggle)
-            themeBtn._hasListener = true
+            ;(themeBtn as any)._hasListener = true
           }
         })
       }
@@ -138,7 +200,6 @@ onMounted(() => {
 
 // 将消息内容转换为 HTML
 const renderedContent = computed(() => {
-  console.log('Message content:', props.message.content)
   return renderMarkdown(props.message.content)
 })
 
@@ -147,18 +208,23 @@ const renderedReasoning = computed(() => {
   if (!props.message.reasoning_content) return ''
   return renderMarkdown(props.message.reasoning_content)
 })
+
+// 判断消息是否正在加载
+const isLoading = computed(() => {
+  return isStreaming.value && props.message.role === 'assistant'
+})
 </script>
 
 <template>
   <div class="chat-message" :class="[
     message.role === 'user' ? 'chat-message--user' : 'chat-message--bot',
-    message.loading ? 'chat-message--waiting' : '',
+    isLoading ? 'chat-message--waiting' : '',
     'loaded'
   ]">
     <!-- 添加用户信息显示 -->
     <div class="chat-message__user-info">
       <div class="chat-message__avatar">
-        <img :src="message.role === 'user' ? icons.dark : icons.light" :alt="message.role" />
+        <img :src="message.role === 'user' ? extendedIcons.dark : extendedIcons.light" :alt="message.role" />
       </div>
       <div class="chat-message__name">
         {{ message.role === 'user' ? '我' : 'AI助手' }}
@@ -182,14 +248,14 @@ const renderedReasoning = computed(() => {
       </div>
 
       <!-- 加载状态提示 - 显示AI正在思考中的状态 -->
-      <div v-if="message.loading && message.role === 'assistant'" class="chat-message__thinking">
-        <img :src="icons.loading" alt="loading" class="chat-message__thinking-icon" />
+      <div v-if="isLoading && message.role === 'assistant'" class="chat-message__thinking">
+        <img :src="extendedIcons.loading" alt="loading" class="chat-message__thinking-icon" />
         <span>内容生成中...</span>
       </div>
 
       <!-- 深度思考折叠控制按钮 - 控制推理内容的显示与隐藏 -->
       <div v-if="message.reasoning_content" class="chat-message__reasoning-toggle" @click="toggleReasoning">
-        <img :src="icons.thinking" alt="thinking" class="chat-message__reasoning-toggle-icon" />
+        <img :src="extendedIcons.thinking" alt="thinking" class="chat-message__reasoning-toggle-icon" />
         <span class="chat-message__reasoning-toggle-text">深度思考</span>
         <el-icon class="chat-message__reasoning-toggle-arrow" :class="{ 'chat-message__reasoning-toggle-arrow--expanded': isReasoningExpanded }">
           <ArrowDown />
@@ -212,39 +278,36 @@ const renderedReasoning = computed(() => {
       </div>
     </div>
 
-    <!-- 操作按钮区域 - 仅在AI消息中显示 -->
-    <div v-if="message.role === 'assistant' && message.loading === false" class="chat-message__actions">
       <!-- 重新生成按钮 - 仅在最后一条AI消息中显示 -->
-        <button
-          v-if="isLastAssistantMessage"
+      <button
+        v-if="isLastAssistantMessage && !isStreaming"
         class="chat-message__action-button"
-          @click="handleRegenerate"
-          data-tooltip="重新生成"
-        >
-        <img :src="icons.regenerate" alt="regenerate" class="chat-message__action-button-icon" />
-        </button>
+        @click="handleRegenerate"
+        data-tooltip="重新生成"
+      >
+        <img :src="extendedIcons.regenerate" alt="regenerate" class="chat-message__action-button-icon" />
+      </button>
 
       <!-- 复制按钮 -->
       <button class="chat-message__action-button" @click="handleCopy" data-tooltip="复制">
-        <img :src="isCopied ? icons.success : icons.copy" alt="copy" class="chat-message__action-button-icon" />
-        </button>
+        <img :src="isCopied ? extendedIcons.success : extendedIcons.copy" alt="copy" class="chat-message__action-button-icon" />
+      </button>
 
       <!-- 点赞按钮 -->
       <button class="chat-message__action-button" @click="handleLike" data-tooltip="喜欢">
-        <img :src="isLiked ? icons.likeActive : icons.like" alt="like" class="chat-message__action-button-icon" />
-        </button>
+        <img :src="isLiked ? extendedIcons.likeActive : extendedIcons.like" alt="like" class="chat-message__action-button-icon" />
+      </button>
 
       <!-- 踩按钮 -->
       <button class="chat-message__action-button" @click="handleDislike" data-tooltip="不喜欢">
-        <img :src="isDisliked ? icons.dislikeActive : icons.dislike" alt="dislike" class="chat-message__action-button-icon" />
-        </button>
+        <img :src="isDisliked ? extendedIcons.dislikeActive : extendedIcons.dislike" alt="dislike" class="chat-message__action-button-icon" />
+      </button>
 
       <!-- Tokens信息展示 - 显示性能指标 -->
       <span v-if="message.completion_tokens" class="chat-message__actions-info">
-          tokens: {{ message.completion_tokens }}, speed: {{ message.speed }} tokens/s
-        </span>
+        tokens: {{ message.completion_tokens }}, speed: {{ message.speed }} tokens/s
+      </span>
     </div>
-  </div>
 </template>
 
 <style lang="scss" scoped>

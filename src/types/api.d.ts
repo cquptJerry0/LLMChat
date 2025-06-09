@@ -94,8 +94,9 @@ export interface APIError extends Error {
 
 // API 请求选项类型
 export interface APIRequestOptions {
-  signal?: AbortSignal; // 用于中断请求的信号
-  messageId?: string;   // 关联的消息ID，用于状态管理
+  signal?: AbortSignal;    // 用于中断请求的信号
+  messageId?: string;      // 关联的消息ID，用于状态管理
+  resumeInfo?: ResumeInfo; // 恢复信息
 }
 
 // 流式响应处理选项
@@ -104,6 +105,7 @@ export interface StreamHandlerOptions {
   messageId: string;      // 关联的消息ID
   initialContent?: string; // 初始内容（用于恢复）
   initialReasoningContent?: string; // 初始推理内容（用于恢复）
+  resumeInfo?: ResumeInfo; // 恢复信息
 }
 
 // API 响应处理器类型
