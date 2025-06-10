@@ -1,16 +1,46 @@
 /* Markdown 渲染的全局样式 */
 .markdown-body {
+  font-family: -apple-system, BlinkMacSystemFont, Segoe UI, 
+    system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, 
+    Noto Sans, sans-serif, Arial, PingFang SC, Source Han Sans SC, Microsoft YaHei UI, Microsoft YaHei, Noto Sans CJK SC, sans-serif;
+  font-size: 16px;
+  line-height: 1.8;
+  color: #000000E6;
+  width: 100%;
+  min-height: 46px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+
+  /* 重置所有元素的边距 */
+  * {
+    margin-block-start: 0;
+    margin-block-end: 0;
+    margin-inline-start: 0;
+    margin-inline-end: 0;
+  }
+
+  /* 段落样式 */
+  p {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    
+    /* 当只有一个段落时，设置边距为0 */
+    &:only-child {
+      margin: 0;
+    }
+  }
+
   /* 链接样式 */
   a {
-    color: #4caf50;
+    color: #409eff;
     text-decoration: none;
     font-weight: 500;
-    border-bottom: 1px dashed #4caf50;
-    transition: color 0.2s, border-bottom 0.2s;
+    transition: color 0.2s;
 
     &:hover {
-      color: #2e7d32;
-      border-bottom: 1px solid #2e7d32;
+      text-decoration: underline;
     }
   }
 
@@ -18,58 +48,56 @@
   table {
     width: 100%;
     border-collapse: collapse;
-    margin: 1rem 0;
+    margin: 0.4rem 0;
+    box-sizing: border-box;
 
     th, td {
-      border: 1px solid #c8e6c9;
-      padding: 0.5rem;
+      border: 1px solid #e0e0e0;
+      padding: 6px;
     }
 
     th {
-      background-color: #f1f8e9;
-      color: #2e7d32;
+      background-color: #f5f7fa;
       font-weight: 600;
     }
 
     tr:nth-child(even) {
-      background-color: #f9fbf9;
+      background-color: #fafafa;
     }
   }
 
   /* 标题样式 */
   h1, h2, h3, h4, h5, h6 {
-    margin-top: 1.5rem;
-    margin-bottom: 1rem;
-    color: #2e7d32;
+    margin-top: 0.8rem;
+    margin-bottom: 0.4rem;
     font-weight: 600;
+    width: 100%;
 
     &:first-child {
-      margin-top: 0.5rem;
+      margin-top: 0.2rem;
     }
   }
 
   /* 列表样式 */
   ul, ol {
-    padding-left: 1.5rem;
-    margin: 1rem 0;
+    padding-left: 1.5em;
+    margin: 0.2em 0;
+    width: 100%;
+    box-sizing: border-box;
 
     li {
-      margin-bottom: 0.5rem;
-
-      &::marker {
-        color: #4caf50;
-      }
+      margin: 0.1em 0;
     }
   }
 
   /* 引用块样式 */
   blockquote {
-    margin: 1rem 0;
-    padding: 0.5rem 1rem;
-    border-left: 4px solid #a5d6a7;
-    background-color: #f1f8e9;
-    color: #2e7d32;
-    font-style: italic;
+    margin: 0.4em 0;
+    padding-left: 0.8em;
+    border-left: 3px solid #e0e0e0;
+    color: #606266;
+    width: 100%;
+    box-sizing: border-box;
   }
 }
 
@@ -78,10 +106,12 @@
   position: relative;
   display: flex;    
   flex-direction: column;
-  margin: 0.3rem 0;
+  margin: 0.6em 0;
   border-radius: 6px;
   overflow: hidden;
   box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+  width: 100%;
+  box-sizing: border-box;
   
   /* 默认亮色主题样式 */
   .code-header {
@@ -91,13 +121,15 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 0.3rem 0.8rem;
-    font-size: 0.9rem;
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+    padding: 0.2rem 0.6rem;
+    font-size: 0.85rem;
+    font-family: -apple-system, BlinkMacSystemFont, Segoe UI, 
+      system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, 
+      Noto Sans, sans-serif, Arial, PingFang SC, Source Han Sans SC, Microsoft YaHei UI, Microsoft YaHei, Noto Sans CJK SC, sans-serif;
     
     .code-lang {
       text-transform: uppercase;
-      font-size: 0.8rem;
+      font-size: 0.75rem;
       font-weight: 500;
       color: #666666;
       letter-spacing: 0.5px;
@@ -106,14 +138,17 @@
   
   pre.hljs {
     margin: 0;
-    padding: 0.8rem;
-    background-color: #ffffff;
+    padding: 0.6rem;
+    background-color: #f6f8fa;
     color: #333333;
     font-family: 'Menlo', 'Monaco', 'Consolas', 'Courier New', monospace;
-    font-size: 0.95rem;
-    line-height: 1.4;
+    font-size: 15px;
+    line-height: 1.5;
     overflow-x: auto;
     tab-size: 2;
+    width: 100%;
+    box-sizing: border-box;
+    white-space: pre-wrap;
   }
   
   /* 暗色主题样式 */
@@ -166,7 +201,7 @@
   }
 
   &:hover {
-    background-color: rgba(76, 175, 80, 0.5);
+    background-color: rgba(64, 158, 255, 0.5);
 
     img {
       opacity: 1;
@@ -228,10 +263,10 @@
 
 /* 内联代码样式 */
 code:not(pre code) {
-  background-color: rgba(175, 184, 193, 0.2);
-  color: #24292f;
+  background-color: rgba(0, 0, 0, 0.05);
+  color: #000000E6;
   padding: 0.2em 0.4em;
-  border-radius: 6px;
-  font-family: ui-monospace, SFMono-Regular, SF Mono, Menlo, Consolas, Liberation Mono, monospace;
+  border-radius: 3px;
+  font-family: 'Menlo', 'Monaco', 'Consolas', 'Courier New', monospace;
   font-size: 85%;
 } 

@@ -28,7 +28,6 @@ export function useStreamControl(
   const {
     chatStore = useNormalizedChatStore,
     streamStore = useStreamStore,
-    clearOnUnmount = false
   } = options
 
   // 初始化存储实例

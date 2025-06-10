@@ -1,62 +1,64 @@
 <script setup lang="ts">
-import { Bubble } from 'vue-element-plus-x'
-import MarkdownRender from './MarkdownRender.vue'
+import { md } from '@/utils/markdown'
+import { computed } from 'vue'
 
-defineProps<{
+const props = defineProps<{
   content: string
 }>()
+
+// 渲染 Markdown
+const renderedContent = computed(() => {
+  if (!props.content) return ''
+  return md.render(props.content)
+})
 </script>
 
 <template>
-  <Bubble
-    :content="content"
-    placement="end"
-    variant="filled"
-    :no-avatar="true"
-    class="user-bubble"
-  >
-    <template #content>
+  <div class="user-wrapper">
+    <div class="user-container">
       <div class="user-content">
-        <MarkdownRender :content="content" />
+        <div class="markdown-content" v-html="renderedContent"></div>
       </div>
-    </template>
-  </Bubble>
+    </div>
+  </div>
 </template>
 
 <style lang="scss" scoped>
-.user-bubble {
-  max-width: 780px;
+.user-wrapper {
+  display: flex;
+  justify-content: flex-end;
   width: 100%;
+  margin: 4px 0;
+}
 
-  :deep(.el-bubble) {
-    background-color: #f2f3f5;
-    border-radius: 16px 4px 16px 16px;
-  }
+.user-container {
+  max-width: 780px;
+  min-height: 46px;
+  background-color: var(--background-color-base);
+  border-radius: 16px;
+  display: flex;
+  align-items: center;
 }
 
 .user-content {
-  padding: 12px 16px;
   color: #000000E6;
-  font-size: 14px;
-  line-height: 1.6;
+  padding: 0 11px;
+  font-size: 16px;
+  line-height: 0.8;
   font-family: -apple-system, BlinkMacSystem, sans-serif;
+  border-radius: 16px 4px 16px 16px;
 
   :deep(.markdown-body) {
     background-color: transparent;
-    font-size: 14px;
-    line-height: 1.6;
+    font-size: 16px;
+    line-height: 0.8;
   }
 }
 
 // 适配暗色主题
 [data-theme="dark"] {
-  .user-bubble {
-    :deep(.el-bubble) {
-      background-color: #303841;
-    }
-  }
-
   .user-content {
+    background-color: #303841;
     color: #e0e0e0;
   }
 }
