@@ -14,12 +14,14 @@ const iconMap: Record<string, string> = {
   // 消息操作
   'send': 'mdi:send',
   'copy': 'mdi:content-copy',
+  'check': 'mdi:check',
   'regenerate': 'mdi:refresh',
 
   // 状态图标
   'loading': 'mdi:loading',
   'success': 'mdi:check-circle',
   'error': 'mdi:alert-circle',
+  'completed': 'mdi:check',
 
   // 其他
   'more': 'mdi:dots-vertical',
@@ -30,7 +32,11 @@ const iconMap: Record<string, string> = {
   'dislike': 'mdi:thumb-down',
   'back': 'mdi:arrow-left',
   'theme': 'mdi:theme-light-dark',
-  'chat': 'mdi:chat'
+  'chat': 'mdi:chat',
+
+  // 聊天框下面的操作图标
+  'share': 'mdi:share-variant',
+  'retry': 'mdi:refresh',
 }
 
 const props = defineProps({

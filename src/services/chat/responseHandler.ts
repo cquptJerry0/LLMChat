@@ -145,6 +145,12 @@ class ResponseHandler implements IResponseHandler {
           if (!event.data) continue;
 
           try {
+            // 检查是否是结束标记
+            if (event.data === '[DONE]') {
+              console.log('收到流结束标记');
+              continue;
+            }
+
             // 解析JSON数据
             const data = JSON.parse(event.data);
             if (!data.choices?.[0]?.delta) {

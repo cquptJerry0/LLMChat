@@ -3,6 +3,7 @@ import type { MessageTree } from '@/stores/normalizedChat'
 import type { ComputedRef } from 'vue'
 import type { useNormalizedChatStore } from '@/stores/normalizedChat'
 import type { useStreamStore } from '@/stores/stream'
+import type { StreamControlReturn } from './streamControl'
 
 // 会话状态接口
 export interface ConversationState {
@@ -26,6 +27,10 @@ export interface MessageActions {
   getTree: (messageId: string) => MessageTree | null
   saveLastAssistant: (messageId: string) => void
   restoreLastAssistant: () => boolean
+  copyMessage: (messageId: string) => boolean
+  likeMessage: (messageId: string, isLike: boolean) => void
+  shareMessage: (messageId: string) => void
+  getStreamControl: (messageId: string) => StreamControlReturn
 }
 
 // 会话控制器配置选项

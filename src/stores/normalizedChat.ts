@@ -317,8 +317,26 @@ export const useNormalizedChatStore = defineStore('normalized-chat', () => {
     localStorage.removeItem(STORAGE_KEYS.LAST_ASSISTANT_MESSAGE)
   }
 
-  // 初始化store
-  initializeFromStorage()
+  // 获取消息历史
+  const getMessageHistory = (messageId: string): any[] => {
+    const history = []
+    let currentId: string | null = messageId
+
+    while (currentId) {
+      const message = messages.value.get(currentId)
+      if (!message) break
+
+      history.unshift({
+        role: message.role as "user" | "assistant" | "system",
+        content: message.content,
+        reasoning_content: message.reasoning_content
+      })
+
+      currentId = message.parentId
+    }
+
+    return history
+  }
 
   // 保存消息历史
   const saveMessageHistory = (messageId: string, history: any[]): void => {
@@ -331,6 +349,9 @@ export const useNormalizedChatStore = defineStore('normalized-chat', () => {
       console.error('Failed to save message history:', error)
     }
   }
+
+  // 初始化store
+  initializeFromStorage()
 
   return {
     // 状态
@@ -349,6 +370,7 @@ export const useNormalizedChatStore = defineStore('normalized-chat', () => {
     switchConversation,
     deleteConversation,
     getMessageTree,
+    getMessageHistory,
     performGC,
     initializeFromStorage,
     saveToStorage,

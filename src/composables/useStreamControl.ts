@@ -1,4 +1,4 @@
-import { computed, onMounted, inject, provide } from 'vue'
+import { computed, onMounted, inject, provide, onUnmounted } from 'vue'
 import { useStreamStore } from '@/stores/stream'
 import { useNormalizedChatStore } from '@/stores/normalizedChat'
 import { chatService } from '@/services/chat/chatService'
@@ -103,7 +103,8 @@ export function useStreamControl(
         const message = _chatStore.messages.get(messageId)
         if (!message?.parentId) return
 
-        const messageHistory = buildMessageHistory(message.parentId)
+        // 使用统一的消息历史构建方法
+        const messageHistory = _chatStore.getMessageHistory(message.parentId)
         await chatService.resumeChatCompletion(
           messageHistory,
           messageId,
@@ -138,42 +139,102 @@ export function useStreamControl(
   }
 
   /**
-   * 构建消息历史
-   * 从指定消息ID开始，向上遍历消息树，构建完整的对话历史
-   *
-   * @param latestMessageId - 最新消息的ID
-   * @returns 完整的消息历史数组
+   * 设置网络恢复和页面可见性变化时的自动恢复
    */
-  const buildMessageHistory = (latestMessageId: string): ChatMessage[] => {
-    const history: ChatMessage[] = []
-    let currentId: string | null = latestMessageId
-
-    while (currentId) {
-      const message = _chatStore.messages.get(currentId) as Message | undefined
-      if (!message) break
-
-      // 类型断言确保角色符合API要求
-      const role = message.role as "user" | "assistant" | "system"
-
-      history.unshift({
-        role,
-        content: message.content,
-        reasoning_content: message.reasoning_content
-      })
-
-      currentId = message.parentId
+  const setupAutoRecover = () => {
+    const handleOnline = () => {
+      if (isPaused.value) {
+        const updateCallback: UpdateCallback = (
+          content,
+          reasoning_content,
+          completion_tokens,
+          speed,
+          tool_calls
+        ) => {
+          _chatStore.updateMessage(messageId, {
+            content,
+            reasoning_content,
+            completion_tokens: Number(completion_tokens),
+            speed: Number(speed),
+            tool_calls
+          })
+        }
+        resume(updateCallback)
+      }
     }
 
-    return history
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && isPaused.value) {
+        const updateCallback: UpdateCallback = (
+          content,
+          reasoning_content,
+          completion_tokens,
+          speed,
+          tool_calls
+        ) => {
+          _chatStore.updateMessage(messageId, {
+            content,
+            reasoning_content,
+            completion_tokens: Number(completion_tokens),
+            speed: Number(speed),
+            tool_calls
+          })
+        }
+        resume(updateCallback)
+      }
+    }
+
+    // 添加事件监听器
+    window.addEventListener('online', handleOnline)
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+
+    // 返回清理函数
+    return () => {
+      window.removeEventListener('online', handleOnline)
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+    }
   }
 
-  // 设置生命周期钩子
+  // 在组件挂载时设置自动恢复
+  let cleanupAutoRecover: (() => void) | undefined
+
   onMounted(() => {
-    // 提供给子组件
-    provide(STREAM_CONTROL_KEY, {
-      state,
-      controls: { pause, resume, cancel }
-    })
+    // 检查是否需要恢复流
+    const streamState = _streamStore.getStreamState(messageId)
+    if (streamState && (streamState.status === 'streaming' || streamState.status === 'paused')) {
+      const updateCallback: UpdateCallback = (
+        content,
+        reasoning_content,
+        completion_tokens,
+        speed,
+        tool_calls
+      ) => {
+        _chatStore.updateMessage(messageId, {
+          content,
+          reasoning_content,
+          completion_tokens: Number(completion_tokens),
+          speed: Number(speed),
+          tool_calls
+        })
+      }
+      resume(updateCallback)
+    }
+
+    // 设置自动恢复
+    cleanupAutoRecover = setupAutoRecover()
+  })
+
+  // 在组件卸载时清理
+  onUnmounted(() => {
+    if (cleanupAutoRecover) {
+      cleanupAutoRecover()
+    }
+  })
+
+  // 提供给子组件
+  provide(STREAM_CONTROL_KEY, {
+    state,
+    controls: { pause, resume, cancel }
   })
 
   // 返回公开的API

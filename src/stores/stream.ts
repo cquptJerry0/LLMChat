@@ -89,7 +89,7 @@ export const useStreamStore = defineStore(
           speed
         })
 
-        // 保存更新后的状态
+        // 每次内容更新时立即保存到 localStorage，确保断网时不丢失内容
         persistStreamState(messageId, {
           content,
           reasoning_content: reasoning_content || '',
@@ -239,11 +239,30 @@ export const useStreamStore = defineStore(
       // 如果内存中没有状态，尝试从localStorage恢复
       if (!stream) {
         const savedState = loadStreamState(messageId)
-        if (savedState && ['streaming', 'paused'].includes(savedState.status)) {
-          startStream(messageId)
-          stream = streams.value.get(streamId)
-          if (stream && savedState.status === 'paused') {
-            pauseStream(messageId)
+        if (savedState) {
+          // 即使状态是 completed，也恢复保存的内容，确保不丢失已生成的内容
+          if (savedState.content) {
+            // 更新消息内容为保存的内容
+            chatStore.updateMessage(messageId, {
+              content: savedState.content,
+              reasoning_content: savedState.reasoning_content,
+              completion_tokens: savedState.completion_tokens,
+              speed: savedState.speed
+            })
+          }
+
+          // 只有流还在进行中或暂停时才恢复流控制
+          if ([StreamStatus.STREAMING, StreamStatus.PAUSED].includes(savedState.status as StreamStatus)) {
+            startStream(messageId)
+            stream = streams.value.get(streamId)
+            if (stream && savedState.status === StreamStatus.PAUSED) {
+              pauseStream(messageId)
+
+              // 恢复暂停位置
+              if (stream && savedState.pausedAt) {
+                stream.pausedAt = savedState.pausedAt
+              }
+            }
           }
         }
       }

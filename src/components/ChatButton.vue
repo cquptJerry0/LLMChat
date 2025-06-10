@@ -1,9 +1,8 @@
-
 <script setup lang="ts">
-import { computed, useSlots } from 'vue'
+import { computed, useSlots, useAttrs } from 'vue'
 import ChatIcon from './ChatIcon.vue'
-// 获取插槽
 const slots = useSlots()
+const attrs = useAttrs()
 const props = defineProps({
   type: {
     type: String,
@@ -45,6 +44,10 @@ const props = defineProps({
   loading: {
     type: Boolean,
     default: false
+  },
+  tooltip: {
+    type: String,
+    default: ''
   }
 })
 
@@ -57,15 +60,66 @@ const iconOnly = computed(() => {
 const iconSize = computed(() => {
   switch (props.size) {
     case 'large': return 20
-    case 'small': return 14
+    case 'small': return 8
     default: return 16
   }
+})
+
+const tooltipAttrs = computed(() => {
+  const tooltipProps = ['content', 'placement', 'effect', 'raw-content', 'disabled', 'offset', 'visible', 'hide-after', 'show-after', 'auto-close', 'manual', 'popper-options', 'enterable', 'show-arrow', 'append-to', 'popper-class', 'teleported', 'transition', 'trigger', 'virtual-triggering', 'virtual-ref', 'persistent']
+  const result: Record<string, any> = {}
+
+  for (const key in attrs) {
+    if (tooltipProps.includes(key)) {
+      result[key] = attrs[key]
+    }
+  }
+  return result
+})
+
+const buttonAttrs = computed(() => {
+  const tooltipProps = ['content', 'placement', 'effect', 'raw-content', 'disabled', 'offset', 'visible', 'hide-after', 'show-after', 'auto-close', 'manual', 'popper-options', 'enterable', 'show-arrow', 'append-to', 'popper-class', 'teleported', 'transition', 'trigger', 'virtual-triggering', 'virtual-ref', 'persistent']
+  const result: Record<string, any> = {}
+
+  for (const key in attrs) {
+    if (!tooltipProps.includes(key)) {
+      result[key] = attrs[key]
+    }
+  }
+  return result
 })
 
 </script>
 
 <template>
+  <el-tooltip v-if="tooltip || tooltipAttrs.content" v-bind="tooltipAttrs" :content="tooltip || tooltipAttrs.content">
+    <el-button
+      :class="[
+        'chat-button',
+        `chat-button--${type}`,
+        `chat-button--${size}`,
+        {
+          'chat-button--circle': circle,
+          'chat-button--text': text,
+          'chat-button--icon-only': iconOnly
+        }
+      ]"
+      v-bind="buttonAttrs"
+      :disabled="disabled"
+      :loading="loading"
+    >
+      <ChatIcon
+        v-if="icon"
+        :name="icon"
+        :size="iconSize"
+        class="chat-button__icon"
+        :class="{ 'chat-button__icon--right': iconPosition === 'right' }"
+      />
+      <slot></slot>
+    </el-button>
+  </el-tooltip>
   <el-button
+    v-else
     :class="[
       'chat-button',
       `chat-button--${type}`,
@@ -97,6 +151,18 @@ const iconSize = computed(() => {
   font-weight: 500;
   border-radius: 6px;
   transition: all 0.2s ease;
+  color: #606266;
+  background-color: #f2f3f5;
+  border-color: transparent;
+
+  &:hover {
+    background-color: #e6e8eb;
+    color: #303133;
+  }
+
+  &:active {
+    background-color: #dcdfe6;
+  }
 
   // 图标样式
   &__icon {
@@ -166,13 +232,73 @@ const iconSize = computed(() => {
 
   // 类型变体样式
   &--primary {
-    // 主题色按钮样式
+    background-color: #409eff;
+    color: #ffffff;
+
+    &:hover {
+      background-color: #66b1ff;
+      color: #ffffff;
+    }
+
+    &:active {
+      background-color: #3a8ee6;
+    }
   }
 
   &--success {
-    // 成功按钮样式
+    background-color: #67c23a;
+    color: #ffffff;
+
+    &:hover {
+      background-color: #85ce61;
+      color: #ffffff;
+    }
+
+    &:active {
+      background-color: #5daf34;
+    }
   }
 
-  // 其他类型样式...
+  &--warning {
+    background-color: #e6a23c;
+    color: #ffffff;
+
+    &:hover {
+      background-color: #ebb563;
+      color: #ffffff;
+    }
+
+    &:active {
+      background-color: #cf9236;
+    }
+  }
+
+  &--danger {
+    background-color: #f56c6c;
+    color: #ffffff;
+
+    &:hover {
+      background-color: #f78989;
+      color: #ffffff;
+    }
+
+    &:active {
+      background-color: #dd6161;
+    }
+  }
+
+  &--info {
+    background-color: #909399;
+    color: #ffffff;
+
+    &:hover {
+      background-color: #a6a9ad;
+      color: #ffffff;
+    }
+
+    &:active {
+      background-color: #82848a;
+    }
+  }
 }
 </style>

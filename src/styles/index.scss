@@ -1,2 +1,22 @@
-@use './variables.scss' as *;
-@use './themes/index.scss' as *;
+@import "variables";
+@import "themes";
+
+// 全局样式
+:root {
+  font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  min-height: 100vh;
+  color: var(--text-primary);
+  background-color: var(--background-color-base);
+  transition: color 0.3s, background-color 0.3s;
+}
+
+* {
+  box-sizing: border-box;
+}

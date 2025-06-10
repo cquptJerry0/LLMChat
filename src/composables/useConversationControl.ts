@@ -18,40 +18,6 @@ import type {
 const CONVERSATION_CONTROL_KEY = Symbol('conversationControl')
 
 /**
- * 消息历史管理：构建消息历史
- * 从指定消息ID开始，向上遍历消息树，构建完整的对话历史
- *
- * @param chatStore - 聊天存储实例
- * @param latestMessageId - 最新消息的ID
- * @returns 完整的消息历史数组
- */
-const buildMessageHistory = (
-  chatStore: ReturnType<typeof useNormalizedChatStore>,
-  latestMessageId: string
-): ChatMessage[] => {
-  const history: ChatMessage[] = []
-  let currentId: string | null = latestMessageId
-
-  while (currentId) {
-    const message: Message | undefined = chatStore.messages.get(currentId)
-    if (!message) break
-
-    history.unshift({
-      role: message.role as "user" | "assistant" | "system",
-      content: message.content,
-      reasoning_content: message.reasoning_content
-    })
-
-    currentId = message.parentId
-  }
-
-  // 使用store保存消息历史
-  chatStore.saveMessageHistory(latestMessageId, history)
-
-  return history
-}
-
-/**
  * 会话控制器 Composable
  * 提供对聊天会话的完整控制，包括会话创建、切换、消息发送等功能
  *
@@ -143,7 +109,9 @@ export function useConversationControl(
 
         messageActions.saveLastAssistant(assistantMessageId)
 
-        const messageHistory = buildMessageHistory(_chatStore, userMessageId)
+        // 使用统一的消息历史构建方法
+        const messageHistory = _chatStore.getMessageHistory(userMessageId)
+        _chatStore.saveMessageHistory(userMessageId, messageHistory)
 
         const updateCallback: UpdateCallback = (
           content,
@@ -205,6 +173,47 @@ export function useConversationControl(
       }
 
       return true
+    },
+
+    // 新增：复制消息内容
+    copyMessage: (messageId: string): boolean => {
+      const message = _chatStore.messages.get(messageId)
+      if (!message) return false
+
+      const textToCopy = message.reasoning_content
+        ? `${message.content}\n\n推理过程：\n${message.reasoning_content}`
+        : message.content
+
+      try {
+        window.navigator.clipboard.writeText(textToCopy)
+        return true
+      } catch (error) {
+        console.error('Failed to copy message:', error)
+        return false
+      }
+    },
+
+    // 新增：点赞/踩消息
+    likeMessage: (messageId: string, isLike: boolean): void => {
+      // 这里可以添加点赞/踩的逻辑，例如保存到服务器
+      console.log('Like message:', messageId, isLike)
+
+      // 为将来的扩展预留接口
+      // 例如：apiService.likeMessage(messageId, isLike)
+    },
+
+    // 新增：分享消息
+    shareMessage: (messageId: string): void => {
+      // 这里可以添加分享逻辑，例如生成分享链接
+      console.log('Share message:', messageId)
+
+      // 为将来的扩展预留接口
+      // 例如：const shareLink = apiService.generateShareLink(messageId)
+    },
+
+    // 新增：获取流控制
+    getStreamControl: (messageId: string) => {
+      return useStreamControl(messageId)
     }
   }
 
@@ -219,13 +228,6 @@ export function useConversationControl(
       if (_chatStore.currentConversationId) {
         messageActions.restoreLastAssistant()
       }
-
-      // 提供给子组件
-      provide(CONVERSATION_CONTROL_KEY, {
-        state,
-        conversationActions,
-        messageActions
-      })
     },
 
     /**
@@ -251,6 +253,13 @@ export function useConversationControl(
 
   onUnmounted(() => {
     lifecycle.cleanup()
+  })
+
+  // 立即提供上下文，而不是等到组件挂载
+  provide(CONVERSATION_CONTROL_KEY, {
+    state,
+    conversationActions,
+    messageActions
   })
 
   // 返回控制器接口

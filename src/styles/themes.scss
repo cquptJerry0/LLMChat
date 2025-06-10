@@ -1,6 +1,6 @@
 :root {
-  // 默认亮色主题 - Kimi风格
-  --primary-color: #7C66FF;  // Kimi的主色调紫色
+  // 默认亮色主题 - 现代黑白灰风格
+  --primary-color: #333333;  // 深灰色作为主色调，现代简约风格
   --success-color: #67C23A;
   --warning-color: #E6A23C;
   --danger-color: #F56C6C;
@@ -27,9 +27,9 @@
   --chat-border-color: #E8E8E8;
 }
 
-// 暗色主题 - Kimi深色模式风格
+// 暗色主题 - 现代深色风格
 [data-theme="dark"] {
-  --primary-color: #7C66FF;  // 保持主色调
+  --primary-color: #EEEEEE;  // 暗色模式下使用浅灰色作为主色调，形成反差
   --success-color: #67C23A;
   --warning-color: #E6A23C;
   --danger-color: #F56C6C;
@@ -56,9 +56,9 @@
   --chat-border-color: #333333;
 }
 
-// 护眼主题 - 更柔和的绿色系
+// 护眼主题 - 更柔和的灰色系
 [data-theme="eye-care"] {
-  --primary-color: #7C66FF;  // 保持主色调，但降低饱和度
+  --primary-color: #555555;  // 中灰色，降低对比度
   --success-color: #68A67A;
   --warning-color: #D3B96D;
   --danger-color: #E88B8B;
