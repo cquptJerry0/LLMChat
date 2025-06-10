@@ -1,0 +1,32 @@
+// 保持你原有的间距系统
+$spacing-mini: 4px;
+$spacing-small: 8px;
+$spacing-base: 16px;
+$spacing-large: 24px;
+$spacing-xl: 32px;
+
+// 字体大小 - 调整为Kimi的字号
+$font-size-mini: 12px;
+$font-size-small: 13px;
+$font-size-base: 14px;
+$font-size-medium: 15px;   
+$font-size-large: 16px;
+$font-size-xl: 18px;
+
+// 圆角 - Kimi的圆角风格
+$border-radius-small: 4px;
+$border-radius-base: 8px; 
+$border-radius-large: 12px;
+$border-radius-round: 20px;
+$border-radius-circle: 50%;
+
+// 阴影 - 更柔和的阴影效果
+$box-shadow-light: 0 2px 8px 0 rgba(0, 0, 0, 0.05);
+$box-shadow-base: 0 2px 12px rgba(0, 0, 0, 0.08);
+$box-shadow-dark: 0 4px 16px rgba(0, 0, 0, 0.12);
+
+// 聊天框特定变量
+$chat-message-max-width: 680px;
+$chat-input-height: 180px;
+$chat-header-height: 60px;
+$sidebar-width: 280px;

@@ -5,17 +5,10 @@ import { LRUCache } from '@/utils/LRUCache'
 import { STORAGE_KEYS } from '@/constants/storage'
 import type { Conversation, Message } from '@/types/chat'
 import type { ToolCall } from '@/types/api'
+import { debounce } from '@/utils/dobounce'
 // 递归构建消息树
 export interface MessageTree extends Omit<Message, 'children'> {
   children: MessageTree[]
-}
-// 防抖函数
-const debounce = (fn: Function, delay: number) => {
-  let timer: NodeJS.Timeout | null = null
-  return (...args: any[]) => {
-    if (timer) clearTimeout(timer)
-    timer = setTimeout(() => fn(...args), delay)
-  }
 }
 
 export const useNormalizedChatStore = defineStore('normalized-chat', () => {

@@ -26,6 +26,10 @@ const props = defineProps({
     type: Boolean,
     default: false,
   },
+  isUser: {
+    type: Boolean,
+    default: false,
+  },
 })
 
 // 扩展 icons 类型以添加缺失的属性
@@ -216,98 +220,11 @@ const isLoading = computed(() => {
 </script>
 
 <template>
-  <div class="chat-message" :class="[
-    message.role === 'user' ? 'chat-message--user' : 'chat-message--bot',
-    isLoading ? 'chat-message--waiting' : '',
-    'loaded'
-  ]">
-    <!-- 添加用户信息显示 -->
-    <div class="chat-message__user-info">
-      <div class="chat-message__avatar">
-        <img :src="message.role === 'user' ? extendedIcons.dark : extendedIcons.light" :alt="message.role" />
-      </div>
-      <div class="chat-message__name">
-        {{ message.role === 'user' ? '我' : 'AI助手' }}
-      </div>
+  <div class="chat-message" :class="{ 'is-user': isUser }">
+    <div class="message-content">
+      <slot></slot>
     </div>
-    <div class="chat-message__content">
-      <!-- 文件预览区域 - 显示用户上传的图片或文件 -->
-      <div v-if="message.files && message.files.length > 0" class="chat-message__files">
-        <div v-for="file in message.files" :key="file.url" class="chat-message__file">
-          <!-- 图片预览 - 直接显示图片内容 -->
-          <div v-if="file.type === 'image'" class="chat-message__file-image">
-            <img :src="file.url" :alt="file.name" />
-          </div>
-          <!-- 文件预览 - 显示文件信息和图标 -->
-          <div v-else class="chat-message__file-document">
-            <el-icon><Document /></el-icon>
-            <span class="chat-message__file-name">{{ file.name }}</span>
-            <span class="chat-message__file-size">{{ (file.size / 1024).toFixed(1) }}KB</span>
-          </div>
-        </div>
-      </div>
-
-      <!-- 加载状态提示 - 显示AI正在思考中的状态 -->
-      <div v-if="isLoading && message.role === 'assistant'" class="chat-message__thinking">
-        <img :src="extendedIcons.loading" alt="loading" class="chat-message__thinking-icon" />
-        <span>内容生成中...</span>
-      </div>
-
-      <!-- 深度思考折叠控制按钮 - 控制推理内容的显示与隐藏 -->
-      <div v-if="message.reasoning_content" class="chat-message__reasoning-toggle" @click="toggleReasoning">
-        <img :src="extendedIcons.thinking" alt="thinking" class="chat-message__reasoning-toggle-icon" />
-        <span class="chat-message__reasoning-toggle-text">深度思考</span>
-        <el-icon class="chat-message__reasoning-toggle-arrow" :class="{ 'chat-message__reasoning-toggle-arrow--expanded': isReasoningExpanded }">
-          <ArrowDown />
-        </el-icon>
-      </div>
-
-      <!-- 推理内容区域 - 显示AI思考过程 -->
-      <div
-        v-if="message.reasoning_content && isReasoningExpanded"
-        class="chat-message__reasoning markdown-body"
-        v-html="renderedReasoning"
-      ></div>
-
-      <!-- 主要消息内容 - 显示实际消息文本 -->
-      <div class="chat-message__bubble markdown-body">
-        <template v-if="message.content">
-          <div v-if="message.role === 'assistant'" v-html="renderedContent"></div>
-          <div v-else>{{ message.content }}</div>
-        </template>
-      </div>
-    </div>
-
-      <!-- 重新生成按钮 - 仅在最后一条AI消息中显示 -->
-      <button
-        v-if="isLastAssistantMessage && !isStreaming"
-        class="chat-message__action-button"
-        @click="handleRegenerate"
-        data-tooltip="重新生成"
-      >
-        <img :src="extendedIcons.regenerate" alt="regenerate" class="chat-message__action-button-icon" />
-      </button>
-
-      <!-- 复制按钮 -->
-      <button class="chat-message__action-button" @click="handleCopy" data-tooltip="复制">
-        <img :src="isCopied ? extendedIcons.success : extendedIcons.copy" alt="copy" class="chat-message__action-button-icon" />
-      </button>
-
-      <!-- 点赞按钮 -->
-      <button class="chat-message__action-button" @click="handleLike" data-tooltip="喜欢">
-        <img :src="isLiked ? extendedIcons.likeActive : extendedIcons.like" alt="like" class="chat-message__action-button-icon" />
-      </button>
-
-      <!-- 踩按钮 -->
-      <button class="chat-message__action-button" @click="handleDislike" data-tooltip="不喜欢">
-        <img :src="isDisliked ? extendedIcons.dislikeActive : extendedIcons.dislike" alt="dislike" class="chat-message__action-button-icon" />
-      </button>
-
-      <!-- Tokens信息展示 - 显示性能指标 -->
-      <span v-if="message.completion_tokens" class="chat-message__actions-info">
-        tokens: {{ message.completion_tokens }}, speed: {{ message.speed }} tokens/s
-      </span>
-    </div>
+  </div>
 </template>
 
 <style lang="scss" scoped>
@@ -391,7 +308,7 @@ const isLoading = computed(() => {
         border-left: 4px solid #4caf50; /* 绿色左侧边框 */
       }
     }
-        }
+  }
 
   /* 机器人身份的消息 - 靠左对齐 */
   &--bot {
@@ -402,7 +319,7 @@ const isLoading = computed(() => {
     /* 机器人消息在加载完成时的动画效果 */
     &.loaded {
       animation: slideInLeft 0.3s ease forwards;
-          }
+    }
 
     .chat-message__content {
       background-color: #ffffff; /* 白色背景 */
@@ -412,7 +329,7 @@ const isLoading = computed(() => {
       box-shadow: 0 4px 8px rgba(0, 0, 0, 0.08); /* 轻微阴影 */
 
       /* 悬停时的阴影变化 */
-              &:hover {
+      &:hover {
         box-shadow: 0 6px 12px rgba(0, 0, 0, 0.12); /* 增强阴影效果 */
       }
 
@@ -422,7 +339,7 @@ const isLoading = computed(() => {
         background-color: #f1f8e9; /* 浅绿色背景 */
       }
     }
-      }
+  }
 
   /* 等待响应的消息样式 */
   &--waiting {
@@ -440,12 +357,12 @@ const isLoading = computed(() => {
     font-size: 15px;
     margin-top: 0.25rem;
     position: relative;
-    }
+  }
 
   /* 文件区域样式 */
   &__files {
     margin-bottom: 12px;
-      display: flex;
+    display: flex;
     flex-wrap: wrap;
     gap: 10px;
   }
@@ -463,11 +380,11 @@ const isLoading = computed(() => {
     overflow: hidden;
     border: 2px solid #e8f5e9;
 
-        img {
+    img {
       width: 100%;
       height: 100%;
       object-fit: cover;
-        }
+    }
   }
 
   /* 文档文件样式 */
@@ -495,7 +412,7 @@ const isLoading = computed(() => {
   &__file-size {
     color: #66bb6a;
     font-size: 12px;
-      }
+  }
 
   /* 思考中状态 */
   &__thinking {
@@ -625,7 +542,6 @@ const isLoading = computed(() => {
       box-shadow: 0 1px 3px rgba(76, 175, 80, 0.2);
     }
   }
-
 }
 
 /* 旋转动画 - 用于加载图标 */
