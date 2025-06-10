@@ -55,7 +55,6 @@ const createNewConversation = () => {
 
   &__header {
     padding: $spacing-base;
-    border-bottom: 1px solid var(--border-color-light);
   }
 
   &__new-chat-btn {
@@ -70,7 +69,6 @@ const createNewConversation = () => {
 
   &__footer {
     padding: $spacing-base;
-    border-top: 1px solid var(--border-color-light);
     display: flex;
     justify-content: center;
   }
@@ -79,4 +77,5 @@ const createNewConversation = () => {
     width: 100%;
   }
 }
+
 </style>

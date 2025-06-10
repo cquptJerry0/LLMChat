@@ -12,25 +12,21 @@ const visible = ref(false)
 const themeOptions: Array<{
   value: Theme
   label: string
-  icon: string
   description: string
 }> = [
   {
     value: 'light',
     label: '浅色模式',
-    icon: 'i-mdi-weather-sunny',
     description: '默认浅色主题，适合日间使用'
   },
   {
     value: 'dark',
     label: '深色模式',
-    icon: 'i-mdi-weather-night',
     description: '深色主题，减少屏幕亮度，适合夜间使用'
   },
   {
     value: 'eye-care',
     label: '护眼模式',
-    icon: 'i-mdi-eye-outline',
     description: '柔和的绿色系主题，减少眼睛疲劳'
   }
 ]
@@ -75,7 +71,7 @@ defineExpose({
           @click="handleThemeChange(option.value)"
         >
           <div class="theme-panel__option-icon">
-            <ChatIcon :name="option.icon.replace('i-mdi-', '')" />
+            <ChatIcon :name="option.value" />
           </div>
           <div class="theme-panel__option-content">
             <div class="theme-panel__option-title">{{ option.label }}</div>

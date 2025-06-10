@@ -11,20 +11,8 @@
   --text-secondary: #8F8F8F;  // 次要信息
   --text-placeholder: #BFBFBF;
 
-  --border-color-base: #E8E8E8;
-  --border-color-light: #F0F0F0;
-  --border-color-lighter: #F5F5F5;
-  --border-color-extra-light: #FAFAFA;
-
-  --background-color-base: #F7F7F7;
+  --background-color-base: rgb(243, 245, 246);
   --background-color-light: #FFFFFF;
-
-  // 聊天应用特定变量 - Kimi风格
-  --chat-background: #F7F7F7;
-  --chat-message-background: #FFFFFF;
-  --chat-message-text: var(--text-primary);
-  --chat-input-background: #FFFFFF;
-  --chat-border-color: #E8E8E8;
 }
 
 // 暗色主题 - 现代深色风格
@@ -40,20 +28,8 @@
   --text-secondary: #A0A0A0;
   --text-placeholder: #666666;
 
-  --border-color-base: #333333;
-  --border-color-light: #2A2A2A;
-  --border-color-lighter: #242424;
-  --border-color-extra-light: #1F1F1F;
-
   --background-color-base: #1A1A1A;
   --background-color-light: #242424;
-
-  // 聊天应用特定变量
-  --chat-background: #1A1A1A;
-  --chat-message-background: #242424;
-  --chat-message-text: var(--text-primary);
-  --chat-input-background: #242424;
-  --chat-border-color: #333333;
 }
 
 // 护眼主题 - 更柔和的灰色系
@@ -69,17 +45,8 @@
   --text-secondary: #7A8B8B;
   --text-placeholder: #96A5A5;
 
-  --border-color-base: #D5E0E0;
-  --border-color-light: #E2EBEB;
-  --border-color-lighter: #EDF3F3;
-  --border-color-extra-light: #F5F9F9;
 
   --background-color-base: #F0F7F4;
   --background-color-light: #FFFFFF;
 
-  --chat-background: #E8F3ED;
-  --chat-message-background: #F5FAF7;
-  --chat-message-text: var(--text-primary);
-  --chat-input-background: #FFFFFF;
-  --chat-border-color: #D5E0E0;
 }

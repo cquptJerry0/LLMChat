@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, inject } from 'vue'
 import { useConversationControlChild } from '@/composables/useConversationControl'
 import UserBubble from './UserBubble.vue'
 import AssistantBubble from './AssistantBubble.vue'
@@ -19,8 +19,41 @@ const props = defineProps<{
 // 使用父组件提供的会话控制
 const { messageActions } = useConversationControlChild()
 
+// 注入 getStreamControl 函数
+const getStreamControlFn = inject<(messageId: string) => any>('getStreamControl') || messageActions.getStreamControl
+
 // 获取流控制
-const streamControl = messageActions.getStreamControl(props.message.id)
+const streamControl = computed(() => {
+  if (props.message.role !== 'assistant') {
+    return {
+      isStreaming: { value: false },
+      isPaused: { value: false },
+      isError: { value: false },
+      isComplete: { value: true },
+      isIncomplete: { value: false }
+    }
+  }
+
+  try {
+    const control = getStreamControlFn(props.message.id)
+    return control || {
+      isStreaming: { value: false },
+      isPaused: { value: false },
+      isError: { value: false },
+      isComplete: { value: true },
+      isIncomplete: { value: false }
+    }
+  } catch (error) {
+    console.error('获取流控制失败:', error)
+    return {
+      isStreaming: { value: false },
+      isPaused: { value: false },
+      isError: { value: true },
+      isComplete: { value: false },
+      isIncomplete: { value: false }
+    }
+  }
+})
 
 // 计算是否是用户消息
 const isUser = computed(() => {
@@ -60,7 +93,9 @@ const handleShare = () => {
       v-else
       :content="message.content"
       :reasoning-content="message.reasoning_content"
-      :is-streaming="streamControl.isStreaming.value"
+      :is-streaming="streamControl.isStreaming?.value || false"
+      :is-error="streamControl.isError?.value || false"
+      :is-paused="streamControl.isPaused?.value || false"
       :avatar="'https://t8.baidu.com/it/u=4011543194,454374607&fm=193'"
       @copy="handleCopy"
       @retry="handleRetry"
@@ -75,6 +110,8 @@ const handleShare = () => {
   display: flex;
   flex-direction: column;
   margin-bottom: $spacing-large;
+  width: 100%;
+  max-width: 780px;
 
   &--user {
     align-items: flex-end;

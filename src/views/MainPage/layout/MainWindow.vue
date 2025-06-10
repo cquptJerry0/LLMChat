@@ -18,12 +18,18 @@ defineEmits(['toggle-sidebar'])
 
     <!-- 消息列表 -->
     <el-main class="main-window__content">
-      <MessageList />
+      <div class="message-list-wrapper">
+        <div class="main-window__content-container">
+          <MessageList />
+        </div>
+      </div>
     </el-main>
 
     <!-- 输入框 -->
     <el-footer class="main-window__footer" height="auto">
-      <ChatInput />
+      <div class="main-window__footer-container">
+        <ChatInput />
+      </div>
     </el-footer>
   </el-container>
 </template>
@@ -31,17 +37,60 @@ defineEmits(['toggle-sidebar'])
 <style lang="scss" scoped>
 .main-window {
   height: 100%;
-
+  background-color: #fff;
   &__content {
     flex: 1;
     padding: 0;
-    overflow: hidden;
     position: relative;
+    overflow: hidden; /* 防止主容器出现滚动条 */
+  }
+
+  &__content-container {
+    max-width: 780px;
+    margin: 0 auto;
+    width: 100%;
+  }
+
+  /* 创建一个内容包装器 */
+  .message-list-wrapper {
+    width: 100%;
+    height: 100%;
+    overflow-y: auto;
+    overflow-x: hidden;
+
+    &::-webkit-scrollbar {
+      width: 8px;
+      background: transparent;
+    }
+
+    &::-webkit-scrollbar-thumb {
+      visibility: hidden;
+      background-color: #c1c1c1;
+      border-radius: 4px;
+    }
+
+    &:hover::-webkit-scrollbar-thumb {
+      visibility: visible;
+    }
+
+    &::-webkit-scrollbar-thumb:hover {
+      background-color: #a8a8a8;
+    }
+  }
+
+  &__footer-container {
+    max-width: 768px;
+    height: 100%;
+    margin: 0 auto;
+    width: 100%;
   }
 
   &__footer {
-    padding: $spacing-base;
-    border-top: 1px solid var(--chat-border-color);
+    min-height: 180px;
+    height: auto;
+    background-color: #fff;
+    padding: 0;
   }
 }
+
 </style>

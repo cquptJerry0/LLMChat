@@ -137,6 +137,24 @@ export const useNormalizedChatStore = defineStore('normalized-chat', () => {
     return conversationData.id
   }
 
+  // 更新会话信息
+  const updateConversation = (
+    conversationId: string,
+    updates: Partial<Omit<Conversation, 'id' | 'messages'>>
+  ) => {
+    const conversation = conversations.value.get(conversationId)
+    if (!conversation) return false
+
+    const updatedConversation = {
+      ...conversation,
+      ...updates,
+      lastUpdatedAt: Date.now()
+    }
+
+    conversations.value.set(conversationId, updatedConversation)
+    return true
+  }
+
   // 添加消息
   const addMessage = (messageData: {
     conversationId: string,
@@ -365,6 +383,7 @@ export const useNormalizedChatStore = defineStore('normalized-chat', () => {
     currentConversationRootMessages,
     // 方法
     addConversation,
+    updateConversation,
     addMessage,
     updateMessage,
     switchConversation,

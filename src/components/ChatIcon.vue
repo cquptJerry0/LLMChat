@@ -37,6 +37,11 @@ const iconMap: Record<string, string> = {
   // 聊天框下面的操作图标
   'share': 'mdi:share-variant',
   'retry': 'mdi:refresh',
+
+  // 主题图标
+  'light': 'mdi:weather-sunny',
+  'dark': 'mdi:weather-night',
+  'eye-care': 'mdi:eye-outline',
 }
 
 const props = defineProps({

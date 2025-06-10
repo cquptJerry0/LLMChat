@@ -25,7 +25,8 @@ defineProps<{
 
 <style lang="scss" scoped>
 .user-bubble {
-  max-width: 80%;
+  max-width: 780px;
+  width: 100%;
 
   :deep(.el-bubble) {
     background-color: #f2f3f5;
@@ -34,11 +35,16 @@ defineProps<{
 }
 
 .user-content {
-  padding: $spacing-base;
-  color: #303133;
+  padding: 12px 16px;
+  color: #000000E6;
+  font-size: 14px;
+  line-height: 1.6;
+  font-family: -apple-system, BlinkMacSystem, sans-serif;
 
   :deep(.markdown-body) {
     background-color: transparent;
+    font-size: 14px;
+    line-height: 1.6;
   }
 }
 

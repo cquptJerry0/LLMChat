@@ -60,7 +60,7 @@ const iconOnly = computed(() => {
 const iconSize = computed(() => {
   switch (props.size) {
     case 'large': return 20
-    case 'small': return 8
+    case 'small': return 12
     default: return 16
   }
 })

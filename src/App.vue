@@ -10,4 +10,6 @@ import { RouterView } from 'vue-router'
 :root {
   --sidebar-width: 260px;
 }
+
+
 </style>

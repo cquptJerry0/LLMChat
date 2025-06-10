@@ -18,6 +18,7 @@ declare module 'vue' {
     ChatView: typeof import('./src/components/ChatView.vue')['default']
     Conversations: typeof import('./src/components/Conversations.vue')['default']
     DialogEdit: typeof import('./src/components/DialogEdit.vue')['default']
+    ElAlert: typeof import('element-plus/es')['ElAlert']
     ElAside: typeof import('element-plus/es')['ElAside']
     ElAvatar: typeof import('element-plus/es')['ElAvatar']
     ElButton: typeof import('element-plus/es')['ElButton']
@@ -49,6 +50,7 @@ declare module 'vue' {
     Sender: typeof import('./src/components/Sender.vue')['default']
     SettingsPanel: typeof import('./src/components/SettingsPanel.vue')['default']
     Sidebar: typeof import('./src/components/Sidebar.vue')['default']
+    StreamMonitor: typeof import('./src/components/StreamMonitor.vue')['default']
     ThemeSwitch: typeof import('./src/components/ThemeSwitch.vue')['default']
     TooltipButton: typeof import('./src/components/TooltipButton.vue')['default']
   }

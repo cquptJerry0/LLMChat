@@ -82,9 +82,8 @@ defineEmits(['toggle-sidebar'])
   display: flex;
   align-items: center;
   justify-content: space-between;
-  height: $chat-header-height;
+  height: 50px;
   padding: 0 $spacing-base;
-  border-bottom: 1px solid var(--chat-border-color);
   background-color: var(--background-color-light);
 
   &__left {

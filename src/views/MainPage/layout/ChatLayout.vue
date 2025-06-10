@@ -35,12 +35,12 @@ const toggleSidebar = () => {
 .chat-layout {
   width: 100%;
   height: 100%;
+  background-color: var(--background-color-base);
 
   &__sidebar {
-    width: $sidebar-width;
+    width: 240px;
     height: 100%;
     transition: width 0.3s ease;
-    border-right: 1px solid var(--chat-border-color);
 
     &--collapsed {
       width: 0;
@@ -52,6 +52,13 @@ const toggleSidebar = () => {
     flex: 1;
     height: 100%;
     overflow: hidden;
+    background-color: #fff;
   }
+}
+.chat-layout__main {
+  border-radius: 17px;
+  border-top: 5px solid var(--background-color-base);
+  border-right: 5px solid var(--background-color-base);
+  border-bottom: 5px solid var(--background-color-base);
 }
 </style>
