@@ -231,7 +231,7 @@ export function XStream<Output = SSEOutput>(
 
   if (transformStream) {
     // 使用自定义转换流 - 适用于非SSE格式的数据处理
-    // 流程: [二进制流] → [文本流] → [自定义转换] → [输出对象]
+    // 流程: [二进制编码流] → [文本流] → [自定义转换] → [输出对象]
     processedStream = readableStream
       .pipeThrough(decoderStream) // Uint8Array → string
       .pipeThrough(transformStream) // string → Output
@@ -284,30 +284,30 @@ export function XStream<Output = SSEOutput>(
   }
 
   // 添加取消方法 - 允许手动取消流处理
- // 添加取消方法 - 允许手动取消流处理
+  // 添加取消方法 - 允许手动取消流处理
   xstream.cancel = async function () {
-      if (streamReader) {
+    if (streamReader) {
+      try {
+        // 通知流取消并释放资源
+        await streamReader.cancel('Stream explicitly cancelled');
+      } catch (error) {
+        // 忽略已释放读取器的错误
+        if (error instanceof TypeError &&
+          error.message.includes('reader has been released')) {
+          // 读取器已经被释放，忽略错误
+        } else {
+          // 其他错误则传递给错误处理器
+          errorHandler(error instanceof Error ? error : new Error(String(error)));
+        }
+      } finally {
         try {
-          // 通知流取消并释放资源
-          await streamReader.cancel('Stream explicitly cancelled');
-        } catch (error) {
-          // 忽略已释放读取器的错误
-          if (error instanceof TypeError &&
-              error.message.includes('reader has been released')) {
-            // 读取器已经被释放，忽略错误
-          } else {
-            // 其他错误则传递给错误处理器
-            errorHandler(error instanceof Error ? error : new Error(String(error)));
-          }
-        } finally {
-          try {
-            streamReader.releaseLock();
-          } catch (e) {
-            // 忽略释放锁时的错误
-          }
+          streamReader.releaseLock();
+        } catch (e) {
+          // 忽略释放锁时的错误
         }
       }
-    };
+    }
+  };
 
   // 处理中断信号 - 支持AbortController中断
   if (signal) {

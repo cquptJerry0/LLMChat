@@ -1,472 +1,263 @@
 <template>
-  <div class="chat-test-container">
-    <h1>聊天测试界面</h1>
+  <div class="test-container">
+    <h1>聊天服务测试</h1>
 
-    <div class="chat-input-panel">
+    <div class="input-area">
       <textarea
         v-model="userInput"
-        placeholder="请输入你的问题..."
-        :disabled="isLoading || isStreaming"
-        @keydown.ctrl.enter="sendMessage"
+        placeholder="请输入消息..."
+        @keydown.enter.prevent="sendMessage"
       ></textarea>
-      <div class="action-buttons">
-        <button
-          @click="sendMessage"
-          :disabled="isLoading || isStreaming || !userInput.trim()"
-          class="send-btn"
-        >
-          发送
-        </button>
-      </div>
+      <button @click="sendMessage" :disabled="loading">发送</button>
+      <button
+        v-if="loading"
+        @click="stopGeneration"
+        class="stop-btn"
+      >
+        停止生成
+      </button>
     </div>
 
-    <div class="controls-panel" v-if="isStreaming || isPaused">
-      <div class="stream-controls">
-        <button @click="pauseStream" :disabled="!isStreaming || isPaused">暂停</button>
-        <button @click="resumeStream" :disabled="!isPaused">继续</button>
-        <button @click="cancelStream" :disabled="!isStreaming && !isPaused">取消</button>
-      </div>
-
-      <div class="typewriter-controls">
-        <div class="control-group">
-          <label>打字速度 (ms):</label>
-          <input type="number" v-model.number="typingSpeed" min="10" max="200" step="10" :disabled="isTyping">
-        </div>
-        <div class="control-group">
-          <label>随机延迟范围 (ms):</label>
-          <input type="number" v-model.number="randomDelayRange" min="0" max="100" step="10" :disabled="isTyping">
-        </div>
-      </div>
-    </div>
-
-    <div class="debug-panel">
-      <h3>调试信息</h3>
-      <div class="debug-info">
-        <p>isStreaming: {{ isStreaming }}</p>
-        <p>isPaused: {{ isPaused }}</p>
-        <p>isTyping: {{ isTyping }}</p>
-        <p>isPausedTyping: {{ isPausedTyping }}</p>
-        <p>原始内容长度: {{ streamContent.length }}</p>
-        <p>显示内容长度: {{ displayContent.length }}</p>
-        <p>队列长度: {{ contentQueue.length }}</p>
-        <p>MessageID: {{ lastMessageId }}</p>
-      </div>
-    </div>
-
-    <div class="chat-content">
-      <div class="message user" v-if="currentQuestion">
+    <div class="message-area">
+      <div v-for="(message, index) in messages" :key="index" :class="['message', message.role]">
         <div class="message-header">
-          <span class="role">用户</span>
+          {{ message.role === 'user' ? '用户' : 'AI' }}
+          <span v-if="message.loading" class="loading">思考中...</span>
+          <span v-if="message.speed" class="speed">{{ message.speed }} tokens/s</span>
         </div>
-        <div class="message-content">{{ currentQuestion }}</div>
+        <div class="message-content">
+          <div v-if="message.role === 'user'">{{ message.content }}</div>
+          <template v-else>
+            <div v-if="message.reasoning_content" class="reasoning">
+              <div class="reasoning-header">思考过程：</div>
+              <div class="reasoning-content typewriter" :class="{ 'is-typing': message.loading }">
+                {{ message.reasoning_content }}
+              </div>
+            </div>
+            <div class="response typewriter" :class="{ 'is-typing': message.loading }">
+              {{ message.content || '...' }}
+            </div>
+          </template>
+        </div>
       </div>
+    </div>
 
-      <div class="message assistant" v-if="streamContent || displayContent">
-        <div class="message-header">
-          <span class="role">助手</span>
-          <div class="message-status" v-if="isStreaming || isPaused">
-            <span v-if="isStreaming && !isPaused">正在回答...</span>
-            <span v-if="isPaused">已暂停</span>
-          </div>
-        </div>
-        <div class="message-content typing">
-          <span class="typed-text">{{ displayContent }}</span>
-          <span class="cursor" :class="{ 'blink': isTyping && !isPausedTyping }">|</span>
-        </div>
-        <div class="message-meta">
-          <span>Token数: {{ completionTokens }}</span>
-          <span>速度: {{ speed }} tokens/s</span>
-          <span v-if="contentQueue.length > 0">队列中待显示: {{ contentQueue.length }} 段</span>
-        </div>
-      </div>
-
-      <div v-if="error" class="error-message">
-        <h3>错误信息:</h3>
-        <pre>{{ error }}</pre>
-      </div>
+    <!-- 调试信息 -->
+    <div class="debug-info" v-if="debugInfo">
+      <pre>{{ debugInfo }}</pre>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onUnmounted } from 'vue'
+import { ref, onMounted } from 'vue'
 import { chatService } from '@/services/chat/chatService'
-import { useConversationControl } from '@/composables/useConversationControl'
-import { useStreamControl } from '@/composables/useStreamControl'
-import type { UpdateCallback, ToolCall } from '@/types/api'
+import type { ChatMessage } from '@/types/api'
+import { useSettingStore } from '@/stores/setting'
 
-// 输入状态
+// 状态
 const userInput = ref('')
-const currentQuestion = ref('')
-const isLoading = ref(false)
-const error = ref('')
+const messages = ref<any[]>([])
+const loading = ref(false)
+const debugInfo = ref('')
+const abortController = ref<AbortController | null>(null)
 
-// 流数据和打字机效果
-const streamContent = ref('')
-const displayContent = ref('') // 用于显示打字机效果的内容
-const reasoningContent = ref('')
-const completionTokens = ref(0)
-const speed = ref('0')
-const isStreaming = ref(false)
-const isPaused = ref(false)
+// 获取设置
+const settingStore = useSettingStore()
 
-// 打字机效果状态
-const isTyping = ref(false)
-const isPausedTyping = ref(false)
-const typingSpeed = ref(50)
-const randomDelayRange = ref(30)
-let typewriterTimeout: number | null = null
-let contentQueue: string[] = [] // 用于存储待显示的内容
-let isProcessingQueue = false
+// 停止生成
+function stopGeneration() {
+  if (abortController.value) {
+    abortController.value.abort()
+    abortController.value = null
 
-// 会话状态
-const conversationId = ref('')
-const lastMessageId = ref('')
+    // 更新调试信息
+    debugInfo.value = `已中断生成。\n${debugInfo.value}`
 
-// 实例化hooks
-const conversationControl = useConversationControl()
-let streamControl: ReturnType<typeof useStreamControl> | null = null
-let autoSaveIntervalId: number | null = null
-
-// 打字机效果实现
-const typeText = async (text: string, startIndex = 0) => {
-  if (!text || text.length === 0) {
-    console.log('没有内容可以显示')
-    return
-  }
-
-  if (!isTyping.value || isPausedTyping.value) {
-    console.log('打字机已暂停或停止')
-    return
-  }
-
-  if (startIndex < text.length) {
-    displayContent.value = text.slice(0, startIndex + 1)
-
-    const baseDelay = typingSpeed.value
-    const randomDelay = Math.random() * randomDelayRange.value
-    const totalDelay = baseDelay + randomDelay
-
-    const currentChar = text[startIndex]
-    const extraDelay = /[,.!?，。！？]/.test(currentChar) ? 300 : 0
-
-    if (startIndex % 20 === 0) {
-      console.log(`打字中... 索引: ${startIndex}/${text.length}, 延迟: ${totalDelay + extraDelay}ms`)
+    // 更新最后一条消息的状态
+    const lastMessage = messages.value[messages.value.length - 1]
+    if (lastMessage && lastMessage.loading) {
+      lastMessage.loading = false
+      lastMessage.content += '\n[已中断生成]'
     }
 
-    typewriterTimeout = window.setTimeout(
-      () => typeText(text, startIndex + 1),
-      totalDelay + extraDelay
-    )
-  } else {
-    console.log('文本打字完成')
-    // 当前文本显示完成，检查队列中是否还有内容
-    if (contentQueue.length > 0) {
-      const nextContent = contentQueue.shift()
-      if (nextContent) {
-        console.log(`开始处理队列中的下一段内容，长度: ${nextContent.length}`)
-        typeText(nextContent)
-      }
-    } else {
-      isProcessingQueue = false
-      // 如果流已经停止，可以重置打字机状态
-      if (!isStreaming.value && !isPaused.value) {
-        isTyping.value = false
-      }
-    }
+    // 重置加载状态
+    loading.value = false
   }
-}
-
-// 更新回调
-const updateCallback: UpdateCallback = (
-  content: string,
-  reasoning: string,
-  tokens: number,
-  generationSpeed: string,
-  toolCalls?: ToolCall[]
-) => {
-  // 更新原始内容
-  streamContent.value = content
-
-  // 处理打字机效果
-  if (!isTyping.value) {
-    // 第一次收到内容，启动打字机效果
-    isTyping.value = true
-    displayContent.value = ''
-    typeText(content)
-  } else {
-    // 将新内容添加到队列
-    const newContent = content.slice(streamContent.value.length)
-    if (newContent) {
-      contentQueue.push(newContent)
-      if (!isProcessingQueue && !isPausedTyping.value) {
-        isProcessingQueue = true
-        const nextContent = contentQueue.shift()
-        if (nextContent) {
-          typeText(nextContent)
-        }
-      }
-    }
-  }
-
-  // 更新其他状态
-  reasoningContent.value = reasoning || ''
-  completionTokens.value = tokens || 0
-  speed.value = generationSpeed || '0'
 }
 
 // 发送消息
-const sendMessage = async () => {
-  if (!userInput.value.trim() || isLoading.value || isStreaming.value) return
+async function sendMessage() {
+  if (!userInput.value.trim() || loading.value) return
+
+  // 创建新的中断控制器
+  abortController.value = new AbortController()
+
+  // 添加用户消息
+  const userMessage = {
+    id: Date.now(),
+    role: 'user',
+    content: userInput.value,
+    reasoning_content: '',
+    files: [],
+    tool_calls: [],
+    completion_tokens: 0,
+    speed: 0,
+    loading: false
+  }
+  messages.value.push(userMessage)
+
+  // 准备AI回复
+  const messageId = `msg_${Date.now()}`
+  const aiMessage = {
+    id: messageId,
+    role: 'assistant',
+    content: '',
+    reasoning_content: '',
+    files: [],
+    tool_calls: [],
+    completion_tokens: 0,
+    speed: 0,
+    loading: true
+  }
+  messages.value.push(aiMessage)
+
+  // 清空输入框并设置加载状态
+  const input = userInput.value
+  userInput.value = ''
+  loading.value = true
+
+  // 更新调试信息
+  debugInfo.value = `准备发送请求:
+- Stream模式: ${settingStore.settings.stream}
+- 消息ID: ${messageId}
+- 模型: ${settingStore.settings.model}
+- API Key: ${settingStore.settings.apiKey ? '已设置' : '未设置'}`
 
   try {
-    // 重置状态
-    isLoading.value = true
-    error.value = ''
-    streamContent.value = ''
-    displayContent.value = ''
-    reasoningContent.value = ''
-    completionTokens.value = 0
-    speed.value = '0'
-    contentQueue = []
-    isProcessingQueue = false
-    isTyping.value = false
-    isPausedTyping.value = false
+    // 准备API消息格式
+    const apiMessages: ChatMessage[] = [
+      { role: 'user', content: input }
+    ]
 
-    // 保存当前问题
-    currentQuestion.value = userInput.value
-
-    // 创建会话（如果不存在）
-    if (!conversationId.value) {
-      conversationId.value = conversationControl.createConversation('测试会话')
-    }
-
-    // 初始化状态
-    isStreaming.value = true
-
-    // 发送消息 - 使用chatService直接发送以确保流处理正确
-    const testMessageId = `test_${Date.now()}`
-    lastMessageId.value = testMessageId
-
-    console.log('开始发送消息:', currentQuestion.value)
-
-    // 初始化流控制
-    streamControl = useStreamControl(testMessageId)
-
-    // 设置自动保存
-    if (streamControl) {
-      autoSaveIntervalId = streamControl.setupAutoSave()
-    }
-
-    // 直接使用chatService
-    await chatService.createChatCompletion(
-      [{ role: 'user', content: currentQuestion.value }],
+    // 调用聊天服务
+    const response = await chatService.createChatCompletion(
+      apiMessages,
       {
-        messageId: testMessageId,
-        updateCallback: (content, reasoning, tokens, generationSpeed, toolCalls) => {
-          console.log('收到内容更新:', {
-            contentLength: content.length,
-            hasReasoning: !!reasoning,
-            tokens,
-            speed: generationSpeed
-          })
+        messageId,
+        signal: abortController.value.signal,
+        updateCallback: (content, reasoning, tokens, speed, toolCalls) => {
+          // 更新调试信息
+          debugInfo.value = `收到更新:
+- 内容长度: ${content.length}
+- 推理内容长度: ${reasoning?.length || 0}
+- Tokens: ${tokens}
+- 速度: ${speed}
+- 工具调用: ${toolCalls?.length || 0}
+- 响应类型: ${response instanceof Response ? 'Stream' : 'Normal'}`
 
-          // 更新原始内容
-          streamContent.value = content
-
-          // 处理打字机效果
-          if (!isTyping.value) {
-            console.log('启动打字机效果')
-            // 第一次收到内容，启动打字机效果
-            isTyping.value = true
-            displayContent.value = ''
-            typeText(content)
-          } else {
-            // 将新内容添加到队列
-            const newContent = content.slice(streamContent.value.length)
-            if (newContent) {
-              console.log(`添加新内容到队列: ${newContent.length}字符`)
-              contentQueue.push(newContent)
-              if (!isProcessingQueue && !isPausedTyping.value) {
-                isProcessingQueue = true
-                const nextContent = contentQueue.shift()
-                if (nextContent) {
-                  typeText(nextContent)
-                }
-              }
+          // 更新消息内容（打字机效果）
+          const currentMessage = messages.value.find(m => m.id === messageId)
+          if (currentMessage) {
+            currentMessage.content = content
+            currentMessage.reasoning_content = reasoning || ''
+            currentMessage.completion_tokens = tokens
+            currentMessage.speed = speed
+            currentMessage.tool_calls = toolCalls
+            // 只有在完成时才设置loading为false
+            if (content && !currentMessage.error) {
+              currentMessage.loading = false
             }
-          }
-
-          // 更新其他状态
-          reasoningContent.value = reasoning || ''
-          completionTokens.value = tokens || 0
-          speed.value = generationSpeed || '0'
-
-          // 更新流控制
-          if (streamControl) {
-            isStreaming.value = streamControl.isStreaming.value
-            isPaused.value = streamControl.isPaused.value
           }
         }
       }
     )
 
-    // 清空输入框
-    userInput.value = ''
-
-  } catch (err) {
-    error.value = err instanceof Error ? err.message : String(err)
-    isStreaming.value = false
-    console.error('消息发送错误:', err)
+    // 更新调试信息
+    debugInfo.value += '\n\n请求已发送，等待响应...'
+  } catch (error) {
+    // 检查是否是因为中断引起的错误
+    if (abortController.value?.signal.aborted) {
+      console.log('请求被用户中断')
+    } else {
+      console.error('聊天请求失败:', error)
+      // 显示错误消息
+      const errorMessage = error instanceof Error ? error.message : '未知错误'
+      const currentMessage = messages.value.find(m => m.id === messageId)
+      if (currentMessage) {
+        currentMessage.content = `请求失败: ${errorMessage}`
+        currentMessage.error = true
+        currentMessage.loading = false
+      }
+      // 更新调试信息
+      debugInfo.value = `请求失败:\n${errorMessage}`
+    }
   } finally {
-    isLoading.value = false
+    loading.value = false
+    // 清空中断控制器
+    abortController.value = null
   }
 }
 
-// 暂停流
-const pauseStream = () => {
-  console.log('尝试暂停流')
-  if (streamControl && !isPaused.value) {
-    console.log('执行暂停操作')
-    isPaused.value = true
-    isPausedTyping.value = true
-
-    // 暂停流并获取当前的 AbortController
-    const currentController = streamControl.pause()
-
-    // 如果需要中止当前请求，可以在这里处理
-    if (currentController) {
-      currentController.abort('Stream paused by user')
-    }
+onMounted(() => {
+  // 初始化欢迎消息
+  const welcomeMessage = {
+    id: Date.now(),
+    role: 'assistant',
+    content: '你好！我是AI助手，请输入消息开始聊天。',
+    reasoning_content: '',
+    files: [],
+    tool_calls: [],
+    completion_tokens: 0,
+    speed: 0,
+    loading: false
   }
-}
+  messages.value.push(welcomeMessage)
 
-// 恢复流
-const resumeStream = async () => {
-  console.log('尝试恢复流')
-  if (streamControl && isPaused.value) {
-    console.log('执行恢复操作')
-    isPaused.value = false
-    isPausedTyping.value = false
-
-    try {
-      await streamControl.resume(updateCallback)
-    } catch (err) {
-      console.error('恢复流失败:', err)
-      error.value = err instanceof Error ? err.message : '恢复流失败'
-    }
-  }
-}
-
-// 取消流
-const cancelStream = () => {
-  console.log('尝试取消流')
-  if (streamControl) {
-    console.log('执行取消操作')
-    streamControl.cancel()
-    isStreaming.value = false
-    isPaused.value = false
-    isPausedTyping.value = false
-    isTyping.value = false
-  }
-}
-
-// 暂停打字效果
-const pauseTypewriter = () => {
-  isPausedTyping.value = true
-  if (typewriterTimeout) {
-    clearTimeout(typewriterTimeout)
-    typewriterTimeout = null
-  }
-}
-
-// 继续打字效果
-const resumeTypewriter = () => {
-  if (!isTyping.value) return
-  isPausedTyping.value = false
-  if (contentQueue.length > 0) {
-    const nextContent = contentQueue.shift()
-    if (nextContent) {
-      typeText(nextContent)
-    }
-  } else {
-    typeText(streamContent.value, displayContent.value.length)
-  }
-}
-
-// 停止打字效果
-const stopTypewriter = () => {
-  isTyping.value = false
-  isPausedTyping.value = false
-  if (typewriterTimeout) {
-    clearTimeout(typewriterTimeout)
-    typewriterTimeout = null
-  }
-  contentQueue = []
-  isProcessingQueue = false
-  displayContent.value = streamContent.value
-}
-
-// 在组件卸载时清理资源
-onUnmounted(() => {
-  if (typewriterTimeout) {
-    clearTimeout(typewriterTimeout)
-  }
-
-  // 清理自动保存定时器
-  if (streamControl && autoSaveIntervalId) {
-    streamControl.cleanupAutoSave(autoSaveIntervalId)
-  }
+  // 显示初始设置
+  debugInfo.value = `当前设置:
+- 模型: ${settingStore.settings.model}
+- Stream模式: ${settingStore.settings.stream}
+- API Key: ${settingStore.settings.apiKey ? '已设置' : '未设置'}
+- Max Tokens: ${settingStore.settings.maxTokens}
+- Temperature: ${settingStore.settings.temperature}
+- Top P: ${settingStore.settings.topP}
+- Top K: ${settingStore.settings.topK}`
 })
 </script>
 
 <style scoped>
-.chat-test-container {
-  max-width: 1000px;
+.test-container {
+  max-width: 800px;
   margin: 0 auto;
   padding: 20px;
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-  min-height: 100vh;
+  font-family: Arial, sans-serif;
 }
 
-.chat-input-panel {
+.input-area {
   display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding: 20px;
-  background-color: #f5f5f5;
-  border-radius: 8px;
+  margin-bottom: 20px;
 }
 
 textarea {
-  width: 100%;
-  min-height: 100px;
-  padding: 12px;
-  border: 1px solid #ddd;
+  flex: 1;
+  height: 60px;
+  padding: 10px;
+  border: 1px solid #ccc;
   border-radius: 4px;
-  resize: vertical;
-  font-family: inherit;
+  resize: none;
   font-size: 16px;
 }
 
-.action-buttons {
-  display: flex;
-  justify-content: flex-end;
-}
-
 button {
-  padding: 8px 16px;
+  margin-left: 10px;
+  padding: 0 20px;
+  background-color: #4CAF50;
+  color: white;
   border: none;
   border-radius: 4px;
   cursor: pointer;
-  font-weight: 500;
-}
-
-.send-btn {
-  background-color: #4caf50;
-  color: white;
+  font-size: 16px;
 }
 
 button:disabled {
@@ -474,60 +265,17 @@ button:disabled {
   cursor: not-allowed;
 }
 
-.controls-panel {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 15px;
-  background-color: #f0f7ff;
-  border-radius: 8px;
-}
-
-.stream-controls {
-  display: flex;
-  gap: 10px;
-}
-
-.stream-controls button {
-  background-color: #2196f3;
-  color: white;
-}
-
-.typewriter-controls {
-  display: flex;
-  gap: 20px;
-}
-
-.control-group {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.control-group label {
-  font-size: 14px;
-  color: #666;
-}
-
-.control-group input {
-  width: 80px;
-  padding: 4px 8px;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-}
-
-.chat-content {
+.message-area {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 10px;
+  margin-bottom: 20px;
 }
 
 .message {
-  display: flex;
-  flex-direction: column;
-  padding: 15px;
+  padding: 10px;
   border-radius: 8px;
-  max-width: 90%;
+  max-width: 80%;
 }
 
 .message.user {
@@ -537,86 +285,97 @@ button:disabled {
 
 .message.assistant {
   align-self: flex-start;
-  background-color: #f1f8e9;
+  background-color: #f1f1f1;
 }
 
 .message-header {
-  display: flex;
-  justify-content: space-between;
-  margin-bottom: 8px;
   font-weight: bold;
+  margin-bottom: 5px;
+  font-size: 14px;
+  color: #666;
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
-.message-status {
+.loading {
+  color: #ff9800;
+  font-size: 12px;
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+.speed {
+  color: #4caf50;
+  font-size: 12px;
+}
+
+.message-content {
+  font-size: 16px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
+.reasoning {
+  margin-bottom: 10px;
+  padding: 8px;
+  background-color: #fff3e0;
+  border-radius: 4px;
+}
+
+.reasoning-header {
+  font-size: 14px;
+  color: #ff9800;
+  margin-bottom: 4px;
+}
+
+.reasoning-content {
   font-size: 14px;
   color: #666;
   font-style: italic;
 }
 
-.message-content {
-  white-space: pre-wrap;
-  line-height: 1.6;
+.response {
+  margin-top: 8px;
 }
 
-.message-content.typing {
-  font-family: 'Courier New', Courier, monospace;
+.typewriter {
+  border-right: 2px solid transparent;
 }
 
-.message-meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 15px;
-  margin-top: 10px;
-  font-size: 12px;
-  color: #666;
-}
-
-.cursor {
-  display: inline-block;
-  width: 2px;
-  height: 18px;
-  background-color: #333;
-  margin-left: 2px;
-  animation: none;
-}
-
-.cursor.blink {
-  animation: blink 1s step-end infinite;
-}
-
-@keyframes blink {
-  from, to {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0;
-  }
-}
-
-.error-message {
-  padding: 15px;
-  background-color: #ffebee;
-  border-radius: 8px;
-  margin-top: 20px;
-}
-
-pre {
-  margin: 0;
-  white-space: pre-wrap;
-  font-family: monospace;
-}
-
-.debug-panel {
-  padding: 20px;
-  background-color: #f5f5f5;
-  border-radius: 8px;
+.typewriter.is-typing {
+  border-right-color: #333;
+  animation: blinking-cursor 1s step-end infinite;
 }
 
 .debug-info {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 15px;
-  font-size: 14px;
-  color: #666;
+  margin-top: 20px;
+  padding: 10px;
+  background-color: #f5f5f5;
+  border-radius: 4px;
+  font-family: monospace;
+  font-size: 12px;
+  white-space: pre-wrap;
+}
+
+@keyframes blinking-cursor {
+  from, to { border-color: transparent; }
+  50% { border-color: #333; }
+}
+
+@keyframes pulse {
+  0% { opacity: 1; }
+  50% { opacity: 0.5; }
+  100% { opacity: 1; }
+}
+
+.stop-btn {
+  margin-left: 10px;
+  padding: 0 20px;
+  background-color: #f44336;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 16px;
 }
 </style>

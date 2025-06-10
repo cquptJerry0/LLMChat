@@ -1,6 +1,6 @@
 import { XStream, type XStreamOptions } from '@/utils/xstream'
 import { useStreamStore } from '@/stores/stream'
-import { calculateSpeed, formatSpeed } from '@/utils/speed'
+import { calculateSpeed } from '@/utils/speed'
 import type { MessageRole, MessageFile } from '@/types/message'
 import type { ToolCall } from '@/types/api'
 import type {
@@ -112,13 +112,10 @@ class ResponseHandler implements IResponseHandler {
     }
 
     try {
-      // 获取流读取器
-      const reader = response.body
-        .pipeThrough(new TextDecoderStream())
-        .getReader();
+      // 克隆响应以便我们可以使用XStream处理
+      const clonedResponse = response.clone();
 
       // 初始化状态，如果有恢复信息则使用恢复信息
-      let buffer = '';
       let accumulatedContent = resumeInfo?.lastContent || '';
       let accumulatedReasoning = resumeInfo?.lastReasoning || '';
       let lastCompletionTokens = resumeInfo?.lastTokens || 0;
@@ -136,41 +133,26 @@ class ResponseHandler implements IResponseHandler {
         );
       }
 
-      // 读取数据流
-      while (true) {
-        // 检查是否中断
-        if (signal?.aborted) {
-          console.log('流处理被中断', { messageId });
-          reader.cancel('用户取消请求');
-          break;
-        }
+      // 使用XStream处理流式响应
+      const stream = XStream({
+        readableStream: clonedResponse.body!
+      } as XStreamOptions, signal);
 
-        // 尝试读取下一块数据
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        // 将接收到的数据添加到缓冲区
-        buffer += value;
-
-        // 处理完整的 SSE 消息
-        const lines = buffer.split('\n');
-        buffer = lines.pop() || ''; // 保留最后一行（可能不完整）
-
-        for (const line of lines) {
-          if (!line.trim() || line.includes('[DONE]')) continue;
+      // 异步迭代处理流
+      try {
+        for await (const event of stream) {
+          // 检查是否有data字段
+          if (!event.data) continue;
 
           try {
-            // 移除 "data: " 前缀并解析数据
-            const jsonStr = line.replace(/^data: /, '').trim();
-            if (!jsonStr) continue;
-
-            const data = JSON.parse(jsonStr);
+            // 解析JSON数据
+            const data = JSON.parse(event.data);
             if (!data.choices?.[0]?.delta) {
               console.warn('警告: SSE 消息缺少必要的字段:', data);
               continue;
             }
 
-            const delta = data.choices[0].delta;
+            const delta: DeltaMessage = data.choices[0].delta;
 
             // 更新累积内容
             if (delta.content) {
@@ -199,9 +181,16 @@ class ResponseHandler implements IResponseHandler {
               updateCallback
             );
           } catch (error) {
-            console.error('解析 SSE 数据错误:', error, '原始数据:', line);
-            // 继续处理下一行
+            console.error('解析 SSE 数据错误:', error, '原始数据:', event.data);
+            // 继续处理下一个事件
           }
+        }
+      } catch (error) {
+        // 检查是否是因为中断信号导致的错误
+        if (signal?.aborted) {
+          console.log('流处理被中断', { messageId });
+        } else {
+          throw error;
         }
       }
     } catch (error) {

@@ -10,6 +10,19 @@ export enum StreamStatus {
   ERROR = 'error'
 }
 
+// 持久化的流状态
+export interface PersistedStreamState {
+  content: string;
+  reasoning_content: string;
+  completion_tokens: number;
+  speed: number;
+  status: string;
+  error?: string;
+  timestamp: number;
+  savedAt: number;
+  pausedAt?: number;
+}
+
 // 恢复信息接口
 export interface ResumeInfo {
   lastContent: string;         // 上次累积的内容

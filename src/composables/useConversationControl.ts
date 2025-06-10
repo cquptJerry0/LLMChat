@@ -1,274 +1,276 @@
-import { computed, ref, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, inject, provide } from 'vue'
 import { useNormalizedChatStore } from '@/stores/normalizedChat'
 import { useStreamStore } from '@/stores/stream'
 import { chatService } from '@/services/chat/chatService'
 import { useStreamControl } from './useStreamControl'
 import type { Message } from '@/types/chat'
 import type { ChatMessage, UpdateCallback } from '@/types/api'
+import type {
+  ConversationState,
+  ConversationControlOptions,
+  ConversationControlContext,
+  LifecycleManager
+} from '@/types/conversationControl'
 
-// 存储键前缀
-const STORAGE_KEY = {
-  LAST_ASSISTANT_MESSAGE: 'last_assistant_message',
-  MESSAGE_HISTORY: 'message_history_'
+/**
+ * 依赖注入的唯一标识符
+ */
+const CONVERSATION_CONTROL_KEY = Symbol('conversationControl')
+
+/**
+ * 消息历史管理：构建消息历史
+ * 从指定消息ID开始，向上遍历消息树，构建完整的对话历史
+ *
+ * @param chatStore - 聊天存储实例
+ * @param latestMessageId - 最新消息的ID
+ * @returns 完整的消息历史数组
+ */
+const buildMessageHistory = (
+  chatStore: ReturnType<typeof useNormalizedChatStore>,
+  latestMessageId: string
+): ChatMessage[] => {
+  const history: ChatMessage[] = []
+  let currentId: string | null = latestMessageId
+
+  while (currentId) {
+    const message: Message | undefined = chatStore.messages.get(currentId)
+    if (!message) break
+
+    history.unshift({
+      role: message.role as "user" | "assistant" | "system",
+      content: message.content,
+      reasoning_content: message.reasoning_content
+    })
+
+    currentId = message.parentId
+  }
+
+  // 使用store保存消息历史
+  chatStore.saveMessageHistory(latestMessageId, history)
+
+  return history
 }
 
-export interface ConversationControl {
-  // 会话状态
-  currentMessages: Message[];
-  rootMessages: Message[];
-  isGenerating: boolean;
-  lastAssistantMessageId: string | null;
+/**
+ * 会话控制器 Composable
+ * 提供对聊天会话的完整控制，包括会话创建、切换、消息发送等功能
+ *
+ * @param options - 控制器配置选项
+ * @returns 会话控制器接口
+ */
+export function useConversationControl(
+  options: ConversationControlOptions = {}
+): ConversationControlContext {
+  const {
+    chatStore = useNormalizedChatStore,
+    streamStore = useStreamStore,
+    clearOnUnmount = false
+  } = options
 
-  // 会话操作
-  createConversation: (title: string) => string;
-  switchConversation: (id: string) => boolean;
-  deleteConversation: (id: string) => boolean;
+  const _chatStore = chatStore()
 
-  // 消息操作
-  sendMessage: (content: string, parentId?: string) => Promise<string>;
-  resendMessage: (messageId: string) => Promise<void>;
-  getMessageTree: (messageId: string) => Message | null;
-
-  // 消息恢复
-  restoreLastAssistantMessage: () => boolean;
-  saveLastAssistantMessageId: (messageId: string) => void;
-}
-
-export function useConversationControl() {
-  const chatStore = useNormalizedChatStore()
-  const streamStore = useStreamStore()
-
-  // 本地状态
-  const isGenerating = ref(false)
+  // 本地状态管理
+  const isGenerating = ref<boolean>(false)
   const lastAssistantMessageId = ref<string | null>(null)
 
-  // 计算属性：当前会话的消息
-  const currentMessages = computed(() => chatStore.currentConversationAllMessages)
-  const rootMessages = computed(() => chatStore.currentConversationRootMessages)
+  // 会话状态计算属性
+  const state = computed<ConversationState>(() => {
+    const msgs = _chatStore.currentConversationAllMessages
+    const rootMsgs = _chatStore.currentConversationRootMessages
+    const currentMessages: Message[] = msgs.filter((msg: unknown): msg is Message => msg !== undefined)
+    const rootMessages: Message[] = rootMsgs.filter((msg: unknown): msg is Message => msg !== undefined)
 
-  // 创建新会话
-  const createConversation = (title: string) => {
-    const id = `conv_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
-    return chatStore.addConversation({ id, title })
-  }
-
-  // 切换会话
-  const switchConversation = (id: string) => {
-    const result = chatStore.switchConversation(id)
-    if (result) {
-      // 切换会话后尝试恢复最后一条助手消息
-      restoreLastAssistantMessage()
-    }
-    return result
-  }
-
-  // 删除会话
-  const deleteConversation = (id: string) => {
-    // 如果删除的是当前会话，清除最后一条助手消息ID
-    if (id === chatStore.currentConversationId) {
-      localStorage.removeItem(STORAGE_KEY.LAST_ASSISTANT_MESSAGE)
-      lastAssistantMessageId.value = null
-    }
-    return chatStore.deleteConversation(id)
-  }
-
-  // 保存最后一条助手消息ID
-  const saveLastAssistantMessageId = (messageId: string) => {
-    if (!chatStore.currentConversationId) return
-
-    localStorage.setItem(STORAGE_KEY.LAST_ASSISTANT_MESSAGE, JSON.stringify({
-      conversationId: chatStore.currentConversationId,
-      messageId: messageId,
-      timestamp: Date.now()
-    }))
-
-    lastAssistantMessageId.value = messageId
-  }
-
-  // 恢复最后一条助手消息
-  const restoreLastAssistantMessage = (): boolean => {
-    try {
-      const savedData = localStorage.getItem(STORAGE_KEY.LAST_ASSISTANT_MESSAGE)
-      if (!savedData) return false
-
-      const { conversationId, messageId, timestamp } = JSON.parse(savedData)
-
-      // 检查是否是当前会话
-      if (conversationId !== chatStore.currentConversationId) return false
-
-      // 检查消息是否存在
-      const message = chatStore.messages.get(messageId)
-      if (!message) return false
-
-      // 设置最后一条助手消息ID
-      lastAssistantMessageId.value = messageId
-
-      // 使用 useStreamControl 恢复流状态
-      const streamControl = useStreamControl(messageId)
-      const restored = streamControl.restoreStreamState()
-
-      // 如果流是未完成状态，设置生成中状态
-      if (restored && streamControl.isIncomplete.value) {
-        isGenerating.value = true
-        // 创建新的流状态（如果不存在）
-        if (!streamStore.streams.get(`stream_${messageId}`)) {
-          streamStore.startStream(messageId)
-          // 如果是暂停状态，设置为暂停
-          if (streamControl.isPaused.value) {
-            streamStore.pauseStream(messageId)
-          }
-        }
-      }
-
-      return restored
-    } catch (error) {
-      console.error('Failed to restore last assistant message:', error)
-      return false
-    }
-  }
-
-  // 发送新消息
-  const sendMessage = async (content: string, parentId?: string): Promise<string> => {
-    if (!chatStore.currentConversationId) {
-      throw new Error('No active conversation')
-    }
-
-    try {
-      isGenerating.value = true
-
-      // 1. 创建用户消息
-      const userMessageId = chatStore.addMessage({
-        conversationId: chatStore.currentConversationId,
-        parentId: parentId || null,
-        role: 'user',
-        content
-      })
-
-      // 2. 创建助手消息（预创建，等待响应）
-      const assistantMessageId = chatStore.addMessage({
-        conversationId: chatStore.currentConversationId,
-        parentId: userMessageId,
-        role: 'assistant',
-        content: ''
-      })
-
-      // 3. 保存最后一条助手消息ID
-      saveLastAssistantMessageId(assistantMessageId)
-
-      // 4. 准备消息历史
-      const messageHistory = buildMessageHistory(userMessageId)
-
-      // 5. 定义更新回调
-      const updateCallback: UpdateCallback = (
-        content,
-        reasoning_content,
-        completion_tokens,
-        speed,
-        tool_calls
-      ) => {
-        chatStore.updateMessage(assistantMessageId, {
-          content,
-          reasoning_content,
-          completion_tokens: Number(completion_tokens),
-          speed: Number(speed)
-        })
-      }
-
-      // 6. 获取流控制器
-      const streamControl = useStreamControl(assistantMessageId)
-
-      // 7. 发送请求
-      await chatService.createChatCompletion(
-        messageHistory,
-        {
-          messageId: assistantMessageId,
-          updateCallback
-        }
-      )
-
-      // 8. 完成后清理
-      streamControl.clearStreamState() // 可选：清除流状态
-
-      return assistantMessageId
-    } catch (error) {
-      console.error('Failed to send message:', error)
-      // 错误已经由chatService处理，这里不需要额外处理
-      return ''
-    } finally {
-      isGenerating.value = false
-    }
-  }
-
-  // 重新发送消息
-  const resendMessage = async (messageId: string) => {
-    const message = chatStore.messages.get(messageId)
-    if (!message || message.role !== 'user') return
-
-    await sendMessage(message.content, message.parentId || undefined)
-  }
-
-  // 获取消息树
-  const getMessageTree = (messageId: string) => {
-    return chatStore.getMessageTree(messageId)
-  }
-
-  // 构建消息历史（私有方法）
-  const buildMessageHistory = (latestMessageId: string): ChatMessage[] => {
-    const history: ChatMessage[] = []
-    let currentId: string | null = latestMessageId
-
-    while (currentId) {
-      const message = chatStore.messages.get(currentId)
-      if (!message) break
-
-      history.unshift({
-        role: message.role as "user" | "assistant" | "system",
-        content: message.content,
-        reasoning_content: message.reasoning_content
-      })
-
-      currentId = message.parentId
-    }
-
-    // 保存消息历史到本地存储，便于刷新后恢复
-    try {
-      localStorage.setItem(
-        `${STORAGE_KEY.MESSAGE_HISTORY}${latestMessageId}`,
-        JSON.stringify(history)
-      )
-    } catch (error) {
-      console.error('Failed to save message history:', error)
-    }
-
-    return history
-  }
-
-  // 初始化：尝试恢复最后一条助手消息
-  onMounted(() => {
-    if (chatStore.currentConversationId) {
-      restoreLastAssistantMessage()
+    return {
+      currentMessages,
+      rootMessages,
+      isGenerating: isGenerating.value,
+      lastAssistantMessageId: lastAssistantMessageId.value,
+      currentConversationId: _chatStore.currentConversationId
     }
   })
 
-  return {
-    // 状态
-    currentMessages,
-    rootMessages,
-    isGenerating,
-    lastAssistantMessageId: lastAssistantMessageId.value,
+  /**
+   * 会话相关操作
+   */
+  const conversationActions = {
+    create: (title: string): string => {
+      const id = `conv_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+      return _chatStore.addConversation({ id, title })
+    },
 
-    // 会话操作
-    createConversation,
-    switchConversation,
-    deleteConversation,
+    switch: (id: string): boolean => {
+      const result = _chatStore.switchConversation(id)
+      if (result) {
+        messageActions.restoreLastAssistant()
+      }
+      return result
+    },
 
-    // 消息操作
-    sendMessage,
-    resendMessage,
-    getMessageTree,
-
-    // 消息恢复
-    restoreLastAssistantMessage,
-    saveLastAssistantMessageId
+    delete: (id: string): boolean => {
+      if (id === _chatStore.currentConversationId) {
+        _chatStore.clearLastAssistantMessage()
+        lastAssistantMessageId.value = null
+      }
+      return _chatStore.deleteConversation(id)
+    }
   }
+
+  /**
+   * 消息相关操作
+   */
+  const messageActions = {
+    send: async (content: string, parentId?: string): Promise<string> => {
+      if (!_chatStore.currentConversationId) {
+        throw new Error('No active conversation')
+      }
+
+      try {
+        isGenerating.value = true
+
+        const userMessageId = _chatStore.addMessage({
+          conversationId: _chatStore.currentConversationId,
+          parentId: parentId || null,
+          role: 'user',
+          content
+        })
+
+        const assistantMessageId = _chatStore.addMessage({
+          conversationId: _chatStore.currentConversationId,
+          parentId: userMessageId,
+          role: 'assistant',
+          content: ''
+        })
+
+        messageActions.saveLastAssistant(assistantMessageId)
+
+        const messageHistory = buildMessageHistory(_chatStore, userMessageId)
+
+        const updateCallback: UpdateCallback = (
+          content,
+          reasoning_content,
+          completion_tokens,
+          speed,
+          tool_calls
+        ) => {
+          _chatStore.updateMessage(assistantMessageId, {
+            content,
+            reasoning_content,
+            completion_tokens: Number(completion_tokens),
+            speed: Number(speed),
+            tool_calls: tool_calls
+          })
+        }
+
+        await chatService.createChatCompletion(
+          messageHistory,
+          {
+            messageId: assistantMessageId,
+            updateCallback
+          }
+        )
+
+        return assistantMessageId
+      } catch (error) {
+        console.error('Failed to send message:', error)
+        return ''
+      } finally {
+        isGenerating.value = false
+      }
+    },
+
+    resend: async (messageId: string): Promise<void> => {
+      const message = _chatStore.messages.get(messageId)
+      if (!message || message.role !== 'user') return
+      await messageActions.send(message.content, message.parentId || undefined)
+    },
+
+    getTree: (messageId: string) => {
+      return _chatStore.getMessageTree(messageId)
+    },
+
+    saveLastAssistant: (messageId: string): void => {
+      _chatStore.saveLastAssistantMessage(messageId)
+      lastAssistantMessageId.value = messageId
+    },
+
+    restoreLastAssistant: (): boolean => {
+      const result = _chatStore.restoreLastAssistantMessage()
+      if (!result) return false
+
+      lastAssistantMessageId.value = result.messageId
+
+      const streamControl = useStreamControl(result.messageId)
+      if (streamControl.isIncomplete.value) {
+        isGenerating.value = true
+      }
+
+      return true
+    }
+  }
+
+  /**
+   * 生命周期管理：处理组件的挂载和卸载
+   */
+  const lifecycle: LifecycleManager = {
+    /**
+     * 组件挂载时的设置
+     */
+    setup() {
+      if (_chatStore.currentConversationId) {
+        messageActions.restoreLastAssistant()
+      }
+
+      // 提供给子组件
+      provide(CONVERSATION_CONTROL_KEY, {
+        state,
+        conversationActions,
+        messageActions
+      })
+    },
+
+    /**
+     * 组件卸载时的清理
+     */
+    cleanup() {
+      // 清理生成状态
+      isGenerating.value = false
+      // 清理最后一条消息状态
+      lastAssistantMessageId.value = null
+
+      // 如果配置为卸载时清除
+      if (clearOnUnmount) {
+        _chatStore.clearLastAssistantMessage()
+      }
+    }
+  }
+
+  // 设置生命周期钩子
+  onMounted(() => {
+    lifecycle.setup()
+  })
+
+  onUnmounted(() => {
+    lifecycle.cleanup()
+  })
+
+  // 返回控制器接口
+  return {
+    state,
+    conversationActions,
+    messageActions
+  }
+}
+
+/**
+ * 在子组件中使用父组件提供的会话控制器
+ *
+ * @returns 父组件提供的会话控制器上下文
+ * @throws 如果不在正确的上下文中使用
+ */
+export function useConversationControlChild(): ConversationControlContext {
+  const control = inject<ConversationControlContext>(CONVERSATION_CONTROL_KEY)
+  if (!control) {
+    throw new Error('useConversationControlChild must be used within a ConversationControl provider')
+  }
+  return control
 }

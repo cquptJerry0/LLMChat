@@ -2,15 +2,13 @@
 import { defineStore } from 'pinia'
 import { ref, computed, watch } from 'vue'
 import { LRUCache } from '@/utils/LRUCache'
+import { STORAGE_KEYS } from '@/constants/storage'
 import type { Conversation, Message } from '@/types/chat'
-
-// 存储键名常量
-const STORAGE_KEY = {
-  CONVERSATIONS: 'llm-chat-conversations',
-  CURRENT_CONVERSATION_ID: 'llm-chat-current-conversation',
-  MESSAGES: 'llm-chat-messages'
+import type { ToolCall } from '@/types/api'
+// 递归构建消息树
+export interface MessageTree extends Omit<Message, 'children'> {
+  children: MessageTree[]
 }
-
 // 防抖函数
 const debounce = (fn: Function, delay: number) => {
   let timer: NodeJS.Timeout | null = null
@@ -48,19 +46,19 @@ export const useNormalizedChatStore = defineStore('normalized-chat', () => {
   const initializeFromStorage = () => {
     try {
       // 加载会话数据
-      const savedConversations = localStorage.getItem(STORAGE_KEY.CONVERSATIONS)
+      const savedConversations = localStorage.getItem(STORAGE_KEYS.CONVERSATIONS)
       if (savedConversations) {
         conversations.value = new Map(Object.entries(JSON.parse(savedConversations)))
       }
 
       // 加载当前会话ID
-      const savedCurrentId = localStorage.getItem(STORAGE_KEY.CURRENT_CONVERSATION_ID)
+      const savedCurrentId = localStorage.getItem(STORAGE_KEYS.CURRENT_CONVERSATION_ID)
       if (savedCurrentId) {
         currentConversationId.value = savedCurrentId
       }
 
       // 加载消息数据（只加载当前会话的消息）
-      const savedMessages = localStorage.getItem(STORAGE_KEY.MESSAGES)
+      const savedMessages = localStorage.getItem(STORAGE_KEYS.MESSAGES)
       if (savedMessages) {
         const parsedMessages = JSON.parse(savedMessages) as Record<string, Message>
         Object.entries(parsedMessages).forEach(([id, msg]: [string, Message]) => {
@@ -88,13 +86,13 @@ export const useNormalizedChatStore = defineStore('normalized-chat', () => {
     try {
       // 保存会话数据
       localStorage.setItem(
-        STORAGE_KEY.CONVERSATIONS,
+        STORAGE_KEYS.CONVERSATIONS,
         JSON.stringify(Object.fromEntries(conversations.value))
       )
 
       // 保存当前会话ID
       localStorage.setItem(
-        STORAGE_KEY.CURRENT_CONVERSATION_ID,
+        STORAGE_KEYS.CURRENT_CONVERSATION_ID,
         currentConversationId.value
       )
 
@@ -115,7 +113,7 @@ export const useNormalizedChatStore = defineStore('normalized-chat', () => {
       })
 
       localStorage.setItem(
-        STORAGE_KEY.MESSAGES,
+        STORAGE_KEYS.MESSAGES,
         JSON.stringify(Object.fromEntries(messagesToSave))
       )
     } catch (error) {
@@ -200,7 +198,8 @@ export const useNormalizedChatStore = defineStore('normalized-chat', () => {
       content?: string,
       reasoning_content?: string,
       completion_tokens?: number,
-      speed?: number
+      speed?: number,
+      tool_calls?: ToolCall[]
     }
   ) => {
     const message = messages.value.get(messageId)
@@ -257,11 +256,6 @@ export const useNormalizedChatStore = defineStore('normalized-chat', () => {
     return buildTree(messageId);
   }
 
-  // 递归构建消息树
-  interface MessageTree extends Omit<Message, 'children'> {
-    children: MessageTree[]
-  }
-
   // 获取消息树
   const buildTree = (messageId: string): MessageTree | null => {
     const message = messages.value.get(messageId)
@@ -295,8 +289,55 @@ export const useNormalizedChatStore = defineStore('normalized-chat', () => {
     { deep: true }
   )
 
+  // 保存最后一条助手消息
+  const saveLastAssistantMessage = (messageId: string): void => {
+    if (!currentConversationId.value) return
+
+    localStorage.setItem(STORAGE_KEYS.LAST_ASSISTANT_MESSAGE, JSON.stringify({
+      conversationId: currentConversationId.value,
+      messageId: messageId,
+      timestamp: Date.now()
+    }))
+  }
+
+  // 恢复最后一条助手消息
+  const restoreLastAssistantMessage = (): { messageId: string, conversationId: string } | null => {
+    try {
+      const savedData = localStorage.getItem(STORAGE_KEYS.LAST_ASSISTANT_MESSAGE)
+      if (!savedData) return null
+
+      const { conversationId, messageId } = JSON.parse(savedData)
+      if (conversationId !== currentConversationId.value) return null
+
+      const message = messages.value.get(messageId)
+      if (!message) return null
+
+      return { messageId, conversationId }
+    } catch (error) {
+      console.error('Failed to restore last assistant message:', error)
+      return null
+    }
+  }
+
+  // 清除最后一条助手消息
+  const clearLastAssistantMessage = (): void => {
+    localStorage.removeItem(STORAGE_KEYS.LAST_ASSISTANT_MESSAGE)
+  }
+
   // 初始化store
   initializeFromStorage()
+
+  // 保存消息历史
+  const saveMessageHistory = (messageId: string, history: any[]): void => {
+    try {
+      localStorage.setItem(
+        `${STORAGE_KEYS.MESSAGE_HISTORY}${messageId}`,
+        JSON.stringify(history)
+      )
+    } catch (error) {
+      console.error('Failed to save message history:', error)
+    }
+  }
 
   return {
     // 状态
@@ -317,6 +358,10 @@ export const useNormalizedChatStore = defineStore('normalized-chat', () => {
     getMessageTree,
     performGC,
     initializeFromStorage,
-    saveToStorage
+    saveToStorage,
+    saveLastAssistantMessage,
+    restoreLastAssistantMessage,
+    clearLastAssistantMessage,
+    saveMessageHistory
   }
 })

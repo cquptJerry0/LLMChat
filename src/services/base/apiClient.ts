@@ -99,17 +99,23 @@ class ApiClient {
       }
 
       // 处理响应
-      if (config.responseType === 'text') {
-        // 返回文本响应
-        return response.text() as unknown as T;
-      } else if (config.responseType === 'stream') {
+      if (config.responseType === 'text' || config.responseType === 'stream') {
+        // 克隆响应以确保可以多次读取
+        const clonedResponse = response.clone();
+
         // 检查响应头是否正确
-        const contentType = response.headers.get('content-type');
+        const contentType = clonedResponse.headers.get('content-type');
         if (!contentType?.includes('text/event-stream')) {
           console.warn('Stream response content-type is not text/event-stream:', contentType);
         }
-        // 直接返回响应对象，用于流处理
-        return response as unknown as T;
+
+        // 验证响应是否有效
+        if (!clonedResponse.body) {
+          throw new ApiError('Invalid stream response: body is null');
+        }
+
+        // 返回克隆的响应对象，用于流处理
+        return clonedResponse as unknown as T;
       } else {
         // 默认返回 JSON
         const data = await response.json();

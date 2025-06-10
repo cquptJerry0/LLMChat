@@ -1,7 +1,8 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { useNormalizedChatStore } from './normalizedChat'
-import type { StreamState, ResumeResult } from '@/types/stream'
+import { STORAGE_KEYS } from '@/constants/storage'
+import type { StreamState, ResumeResult, PersistedStreamState } from '@/types/stream'
 import { StreamStatus } from '@/types/stream'
 
 export const useStreamStore = defineStore(
@@ -10,10 +11,41 @@ export const useStreamStore = defineStore(
     const streams = ref<Map<string, StreamState>>(new Map())
     const chatStore = useNormalizedChatStore()
 
-    const startStream = (messageId: string) => {
-      const streamId = `stream_${messageId}`
+    // 内部方法：保存流状态到localStorage
+    const persistStreamState = (messageId: string, state: PersistedStreamState) => {
+      try {
+        localStorage.setItem(
+          `${STORAGE_KEYS.STREAM_STATE_PREFIX}${messageId}`,
+          JSON.stringify(state)
+        )
+        return true
+      } catch (error) {
+        console.error('Failed to save stream state:', error)
+        return false
+      }
+    }
 
-      streams.value.set(streamId, {
+    // 内部方法：从localStorage加载流状态
+    const loadStreamState = (messageId: string): PersistedStreamState | null => {
+      try {
+        const saved = localStorage.getItem(`${STORAGE_KEYS.STREAM_STATE_PREFIX}${messageId}`)
+        if (!saved) return null
+        return JSON.parse(saved) as PersistedStreamState
+      } catch (error) {
+        console.error('Failed to load stream state:', error)
+        return null
+      }
+    }
+
+    // 内部方法：从localStorage删除流状态
+    const removeStreamState = (messageId: string) => {
+      localStorage.removeItem(`${STORAGE_KEYS.STREAM_STATE_PREFIX}${messageId}`)
+    }
+
+    const startStream = (messageId: string) => {
+      const streamId = `${STORAGE_KEYS.STREAM_ID_PREFIX}${messageId}`
+
+      const streamState = {
         id: streamId,
         messageId,
         status: StreamStatus.STREAMING,
@@ -23,13 +55,26 @@ export const useStreamStore = defineStore(
         accumulatedReasoning: '',
         lastCompletionTokens: 0,
         pausedAt: 0
+      }
+
+      streams.value.set(streamId, streamState)
+
+      // 保存初始状态
+      persistStreamState(messageId, {
+        content: '',
+        reasoning_content: '',
+        completion_tokens: 0,
+        speed: 0,
+        status: StreamStatus.STREAMING,
+        timestamp: Date.now(),
+        savedAt: Date.now()
       })
 
       return streamId
     }
 
     const updateStream = (messageId: string, content: string, reasoning_content?: string, completion_tokens?: number, speed?: number) => {
-      const streamId = `stream_${messageId}`
+      const streamId = `${STORAGE_KEYS.STREAM_ID_PREFIX}${messageId}`
       const stream = streams.value.get(streamId)
 
       if (stream && stream.status === StreamStatus.STREAMING) {
@@ -43,11 +88,22 @@ export const useStreamStore = defineStore(
           completion_tokens,
           speed
         })
+
+        // 保存更新后的状态
+        persistStreamState(messageId, {
+          content,
+          reasoning_content: reasoning_content || '',
+          completion_tokens: completion_tokens || 0,
+          speed: speed || 0,
+          status: stream.status,
+          timestamp: Date.now(),
+          savedAt: Date.now()
+        })
       }
     }
 
     const pauseStream = (messageId: string) => {
-      const streamId = `stream_${messageId}`
+      const streamId = `${STORAGE_KEYS.STREAM_ID_PREFIX}${messageId}`
       const stream = streams.value.get(streamId)
 
       if (stream && stream.status === StreamStatus.STREAMING) {
@@ -60,6 +116,18 @@ export const useStreamStore = defineStore(
 
         streams.value.set(streamId, stream)
 
+        // 保存暂停状态
+        persistStreamState(messageId, {
+          content: stream.accumulatedContent,
+          reasoning_content: stream.accumulatedReasoning,
+          completion_tokens: stream.lastCompletionTokens,
+          speed: 0,
+          status: StreamStatus.PAUSED,
+          timestamp: Date.now(),
+          savedAt: Date.now(),
+          pausedAt: stream.pausedAt
+        })
+
         return currentController
       }
 
@@ -67,7 +135,7 @@ export const useStreamStore = defineStore(
     }
 
     const resumeStream = (messageId: string): ResumeResult | null => {
-      const streamId = `stream_${messageId}`
+      const streamId = `${STORAGE_KEYS.STREAM_ID_PREFIX}${messageId}`
       const stream = streams.value.get(streamId)
 
       if (stream && stream.status === StreamStatus.PAUSED) {
@@ -78,6 +146,17 @@ export const useStreamStore = defineStore(
         stream.pauseTime = undefined
 
         streams.value.set(streamId, stream)
+
+        // 保存恢复状态
+        persistStreamState(messageId, {
+          content: stream.accumulatedContent,
+          reasoning_content: stream.accumulatedReasoning,
+          completion_tokens: stream.lastCompletionTokens,
+          speed: 0,
+          status: StreamStatus.STREAMING,
+          timestamp: Date.now(),
+          savedAt: Date.now()
+        })
 
         return {
           signal: newController.signal,
@@ -94,7 +173,7 @@ export const useStreamStore = defineStore(
     }
 
     const completeStream = (messageId: string) => {
-      const streamId = `stream_${messageId}`
+      const streamId = `${STORAGE_KEYS.STREAM_ID_PREFIX}${messageId}`
       const stream = streams.value.get(streamId)
 
       if (stream) {
@@ -103,8 +182,20 @@ export const useStreamStore = defineStore(
         stream.abortController = undefined
         streams.value.set(streamId, stream)
 
+        // 保存完成状态
+        persistStreamState(messageId, {
+          content: stream.accumulatedContent,
+          reasoning_content: stream.accumulatedReasoning,
+          completion_tokens: stream.lastCompletionTokens,
+          speed: 0,
+          status: StreamStatus.COMPLETED,
+          timestamp: Date.now(),
+          savedAt: Date.now()
+        })
+
         setTimeout(() => {
           streams.value.delete(streamId)
+          removeStreamState(messageId)
         }, 5000)
 
         return true
@@ -114,7 +205,7 @@ export const useStreamStore = defineStore(
     }
 
     const setStreamError = (messageId: string, error: string) => {
-      const streamId = `stream_${messageId}`
+      const streamId = `${STORAGE_KEYS.STREAM_ID_PREFIX}${messageId}`
       const stream = streams.value.get(streamId)
 
       if (stream) {
@@ -123,6 +214,18 @@ export const useStreamStore = defineStore(
         stream.abortController = undefined
         streams.value.set(streamId, stream)
 
+        // 保存错误状态
+        persistStreamState(messageId, {
+          content: stream.accumulatedContent,
+          reasoning_content: stream.accumulatedReasoning,
+          completion_tokens: stream.lastCompletionTokens,
+          speed: 0,
+          status: StreamStatus.ERROR,
+          error,
+          timestamp: Date.now(),
+          savedAt: Date.now()
+        })
+
         return true
       }
 
@@ -130,8 +233,22 @@ export const useStreamStore = defineStore(
     }
 
     const getStreamState = (messageId: string): StreamState | undefined => {
-      const streamId = `stream_${messageId}`
-      return streams.value.get(streamId)
+      const streamId = `${STORAGE_KEYS.STREAM_ID_PREFIX}${messageId}`
+      let stream = streams.value.get(streamId)
+
+      // 如果内存中没有状态，尝试从localStorage恢复
+      if (!stream) {
+        const savedState = loadStreamState(messageId)
+        if (savedState && ['streaming', 'paused'].includes(savedState.status)) {
+          startStream(messageId)
+          stream = streams.value.get(streamId)
+          if (stream && savedState.status === 'paused') {
+            pauseStream(messageId)
+          }
+        }
+      }
+
+      return stream
     }
 
     return {
