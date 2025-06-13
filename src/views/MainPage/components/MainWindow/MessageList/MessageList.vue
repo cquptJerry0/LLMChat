@@ -4,19 +4,19 @@ import { useConversationControlChild } from '@/composables/useConversationContro
 import MessageBubble from './components/MessageBubble.vue'
 
 // 使用父组件提供的会话控制
-const { state } = useConversationControlChild()
+const { state: conversationState } = useConversationControlChild()
 
 // 消息列表容器引用
 const messageListRef = ref<HTMLDivElement | null>(null)
 
 // 计算当前会话的消息
 const messages = computed(() => {
-  return state.value.currentMessages || []
+  return conversationState.value.currentMessages || []
 })
 
 // 是否正在生成
 const isGenerating = computed(() => {
-  return state.value.isGenerating
+  return conversationState.value.isGenerating
 })
 
 // 自动滚动到底部
@@ -63,15 +63,6 @@ onMounted(() => {
         :message="message"
       />
     </template>
-
-    <!-- 生成状态 -->
-    <div v-if="isGenerating && messages.length > 0" class="message-list__generating">
-      <div class="message-list__generating-indicator">
-        <span></span>
-        <span></span>
-        <span></span>
-      </div>
-    </div>
   </div>
 </template>
 
@@ -105,43 +96,6 @@ onMounted(() => {
       }
     }
   }
-
-  &__generating {
-    display: flex;
-    justify-content: center;
-    padding: $spacing-base 0;
-
-    &-indicator {
-      display: flex;
-      align-items: center;
-      gap: 4px;
-
-      span {
-        display: inline-block;
-        width: 8px;
-        height: 8px;
-        border-radius: 50%;
-        background-color: var(--primary-color);
-        animation: bounce 1.4s infinite ease-in-out both;
-
-        &:nth-child(1) {
-          animation-delay: -0.32s;
-        }
-
-        &:nth-child(2) {
-          animation-delay: -0.16s;
-        }
-      }
-    }
-  }
 }
 
-@keyframes bounce {
-  0%, 80%, 100% {
-    transform: scale(0);
-  }
-  40% {
-    transform: scale(1);
-  }
-}
 </style>

@@ -1,0 +1,72 @@
+/* 普通文本中的光标 */
+.typewriter-cursor {
+  position: relative;
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-left: 2px;
+  margin-right: 2px;
+  vertical-align: middle;
+  background-color: #000;
+  animation: cursor-pulse 1s infinite;
+
+  &::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: rgba(0, 0, 0, 0.05);
+    animation: cursor-glow 1s infinite;
+  }
+}
+
+/* 代码块中的光标 */
+.code-cursor {
+  display: inline-block;
+  width: 2px;
+  height: 0.9em;
+  margin-left: 2px;
+  margin-right: 1px;
+  vertical-align: middle;
+  background-color: currentColor;
+  opacity: 0.8;
+  animation: code-cursor-blink 1s infinite;
+}
+
+@keyframes cursor-pulse {
+  0%, 100% {
+    transform: scale(1);
+    background: #000;
+    box-shadow: 0 0 3px rgba(0, 0, 0, 0.4);
+  }
+  50% {
+    transform: scale(0.85);
+    background: #333;
+    box-shadow: 0 0 6px rgba(0, 0, 0, 0.2);
+  }
+}
+
+@keyframes cursor-glow {
+  0%, 100% {
+    opacity: 0.2;
+    transform: translate(-50%, -50%) scale(1);
+  }
+  50% {
+    opacity: 0.1;
+    transform: translate(-50%, -50%) scale(1.4);
+  }
+}
+
+@keyframes code-cursor-blink {
+  0%, 100% {
+    opacity: 0.8;
+  }
+  50% {
+    opacity: 0.3;
+  }
+} 

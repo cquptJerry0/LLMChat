@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import { Bubble } from 'vue-element-plus-x'
 import TypeWriter from './TypeWriter.vue'
 import ChatButton from '@/components/ChatButton.vue'
 import { ref, computed } from 'vue'
@@ -63,94 +62,94 @@ const handleShare = () => {
 <template>
   <div class="assistant-wrapper" :class="`assistant-wrapper--${messageStatus}`">
     <div class="assistant-avatar">
-      <el-avatar
-        :size="36"
-        :src="avatar"
-        shape="circle"
-      />
+        <el-avatar
+          :size="36"
+          :src="avatar"
+          shape="circle"
+        />
     </div>
 
     <div class="assistant-container">
-      <!-- 错误状态提示 -->
-      <div v-if="isError" class="assistant-error">
-        <el-alert
-          title="生成出错"
-          type="error"
-          description="AI 助手生成回复时遇到错误，请点击重试按钮重新生成。"
-          show-icon
-          :closable="false"
-          class="assistant-error__alert"
-        />
-      </div>
+          <!-- 错误状态提示 -->
+          <div v-if="isError" class="assistant-error">
+            <el-alert
+              title="生成出错"
+              type="error"
+              description="AI 助手生成回复时遇到错误，请点击重试按钮重新生成。"
+              show-icon
+              :closable="false"
+              class="assistant-error__alert"
+            />
+          </div>
 
-      <!-- 暂停状态提示 -->
-      <div v-else-if="isPaused" class="assistant-paused">
-        <el-alert
-          title="生成已暂停"
-          type="warning"
-          description="AI 助手生成回复已暂停，您可以从流状态监控器中恢复生成。"
-          show-icon
-          :closable="false"
-          class="assistant-paused__alert"
-        />
-      </div>
+          <!-- 暂停状态提示 -->
+          <div v-else-if="isPaused" class="assistant-paused">
+            <el-alert
+              title="生成已暂停"
+              type="warning"
+              description="AI 助手生成回复已暂停，您可以从流状态监控器中恢复生成。"
+              show-icon
+              :closable="false"
+              class="assistant-paused__alert"
+            />
+          </div>
 
-      <!-- 推理内容 -->
-      <div v-if="reasoningContent" class="assistant-reasoning">
-        <div class="assistant-reasoning__title">推理过程：</div>
-        <TypeWriter
-          :content="reasoningContent"
-          :is-streaming="isStreaming"
-        />
-      </div>
+          <!-- 推理内容 -->
+          <div v-if="reasoningContent" class="assistant-reasoning">
+            <div class="assistant-reasoning__title">推理过程：</div>
+            <TypeWriter
+              :content="reasoningContent"
+              :is-streaming="isStreaming"
+            />
+          </div>
 
-      <!-- 主要内容 -->
+          <!-- 主要内容 -->
       <div class="assistant-content">
-        <TypeWriter
-          :content="content"
-          :is-streaming="isStreaming"
-        />
-      </div>
+          <TypeWriter
+            :content="content"
+            :is-streaming="isStreaming"
+          />
+        </div>
 
-      <!-- 操作按钮 -->
-      <div class="assistant-actions">
-        <ChatButton
-          :icon="showCopyTip ? 'check' : 'copy'"
-          size="small"
-          :class="{ 'button-completed': showCopyTip }"
-          @click="handleCopy"
-        >
-          {{ showCopyTip ? '完成' : '复制' }}
-        </ChatButton>
-        <ChatButton
-          icon="retry"
-          size="small"
-          :class="{ 'button-highlight': isError }"
-          @click="handleRetry"
-        >
-          重试
-        </ChatButton>
-        <ChatButton
-          icon="share"
-          size="small"
-          @click="handleShare"
-        >
-          分享
-        </ChatButton>
-        <ChatButton
-          icon="like"
-          size="small"
-          tooltip="赞同"
-          :class="{ 'button-liked': isLiked }"
-          @click="handleLike(true)"
-        />
-        <ChatButton
-          icon="dislike"
-          size="small"
-          tooltip="不赞同"
-          :class="{ 'button-disliked': isDisliked }"
-          @click="handleLike(false)"
-        />
+    <!-- 操作按钮 -->
+    <div class="assistant-actions">
+      <ChatButton
+        :icon="showCopyTip ? 'check' : 'copy'"
+        size="small"
+        :class="{ 'button-completed': showCopyTip }"
+        @click="handleCopy"
+      >
+        {{ showCopyTip ? '完成' : '复制' }}
+      </ChatButton>
+      <ChatButton
+        icon="retry"
+        size="small"
+        :class="{ 'button-highlight': isError }"
+        @click="handleRetry"
+      >
+        重试
+      </ChatButton>
+      <ChatButton
+        icon="share"
+        size="small"
+        @click="handleShare"
+      >
+        分享
+      </ChatButton>
+      <ChatButton
+        icon="like"
+        size="small"
+        tooltip="赞同"
+        :class="{ 'button-liked': isLiked }"
+        @click="handleLike(true)"
+      />
+      <ChatButton
+        icon="dislike"
+        size="small"
+        tooltip="不赞同"
+        :class="{ 'button-disliked': isDisliked }"
+        @click="handleLike(false)"
+      />
       </div>
     </div>
   </div>
@@ -172,8 +171,8 @@ const handleShare = () => {
 
   &--streaming {
     border-bottom: 1px solid #409eff;
+    }
   }
-}
 
 .assistant-avatar {
   flex-shrink: 0;

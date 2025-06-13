@@ -2,8 +2,8 @@ import { computed, onMounted, inject, provide, onUnmounted } from 'vue'
 import { useStreamStore } from '@/stores/stream'
 import { useNormalizedChatStore } from '@/stores/normalizedChat'
 import { chatService } from '@/services/chat/chatService'
-import type { ChatMessage, UpdateCallback } from '@/types/api'
-import type { Message } from '@/types/chat'
+import type { UpdateCallback } from '@/types/api'
+import type { StreamControlOptions, StreamControlReturn, StreamControlContext } from '@/types/streamControl'
 
 /**
  * 依赖注入的唯一标识符，用于在组件树中传递流控制器
@@ -41,7 +41,13 @@ export function useStreamControl(
   const state = computed(() => {
     const message = _chatStore.messages.get(messageId)
     const streamState = _streamStore.getStreamState(messageId)
-
+    const isPaused = streamState?.status === 'paused'
+    const isStreaming = streamState?.status === 'streaming'
+    const isError = streamState?.status === 'error'
+    const isIncomplete = isStreaming || isPaused
+    const isCompleted = streamState?.status === 'completed'
+    const errorMessage = streamState?.error
+    const timestamp = Date.now()
     return {
       content: message?.content || '',
       reasoning_content: message?.reasoning_content || '',
@@ -49,43 +55,22 @@ export function useStreamControl(
       speed: message?.speed || 0,
       status: streamState?.status || 'completed',
       error: streamState?.error,
-      timestamp: Date.now()
+      isPaused,
+      isStreaming,
+      isError,
+      isIncomplete,
+      isCompleted,
+      errorMessage,
+      timestamp
     }
   })
-
-  /**
-   * 派生的计算属性：流是否暂停中
-   */
-  const isPaused = computed((): boolean => state.value.status === 'paused')
-
-  /**
-   * 派生的计算属性：流是否正在生成中
-   */
-  const isStreaming = computed((): boolean => state.value.status === 'streaming')
-
-  /**
-   * 派生的计算属性：流是否出错
-   */
-  const isError = computed((): boolean => state.value.status === 'error')
-
-  /**
-   * 派生的计算属性：错误信息
-   */
-  const errorMessage = computed((): string | undefined => state.value.error)
-
-  /**
-   * 派生的计算属性：流是否未完成（处于流或暂停状态）
-   */
-  const isIncomplete = computed((): boolean =>
-    state.value.status === 'streaming' || state.value.status === 'paused'
-  )
 
   /**
    * 暂停生成流
    * @returns 中断控制器，如果流不在生成中则返回null
    */
   const pause = (): AbortController | null => {
-    if (isStreaming.value) {
+    if (state.value.isStreaming) {
       const controller = _streamStore.pauseStream(messageId)
       return controller instanceof AbortController ? controller : null
     }
@@ -97,7 +82,7 @@ export function useStreamControl(
    * @param updateCallback - 用于更新UI的回调函数
    */
   const resume = async (updateCallback: UpdateCallback): Promise<void> => {
-    if (isPaused.value) {
+    if (state.value.isPaused) {
       try {
         const message = _chatStore.messages.get(messageId)
         if (!message?.parentId) return
@@ -126,7 +111,7 @@ export function useStreamControl(
     try {
       const result = chatService.cancelRequest(messageId)
 
-      if (isIncomplete.value) {
+      if (state.value.isIncomplete) {
         _streamStore.completeStream(messageId)
       }
 
@@ -142,7 +127,7 @@ export function useStreamControl(
    */
   const setupAutoRecover = () => {
     const handleOnline = () => {
-      if (isPaused.value) {
+      if (state.value.isPaused) {
         const updateCallback: UpdateCallback = (
           content,
           reasoning_content,
@@ -163,7 +148,7 @@ export function useStreamControl(
     }
 
     const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible' && isPaused.value) {
+      if (document.visibilityState === 'visible' && state.value.isPaused) {
         const updateCallback: UpdateCallback = (
           content,
           reasoning_content,
@@ -240,30 +225,9 @@ export function useStreamControl(
   return {
     // 状态
     state,
-    isPaused,
-    isStreaming,
-    isError,
-    errorMessage,
-    isIncomplete,
-
-    // 控制方法
+    /// 控制方法
     pause,
     resume,
     cancel
   }
-}
-
-/**
- * 子组件使用的流控制器钩子
- * 必须在 useStreamControl 提供的上下文中使用
- *
- * @returns 父组件提供的流控制器上下文
- * @throws 如果不在正确的上下文中使用
- */
-export function useStreamControlChild(): StreamControlContext {
-  const control = inject<StreamControlContext | undefined>(STREAM_CONTROL_KEY)
-  if (!control) {
-    throw new Error('useStreamControlChild must be used within a StreamControl provider')
-  }
-  return control
 }

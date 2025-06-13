@@ -22,6 +22,9 @@ const iconMap: Record<string, string> = {
   'success': 'mdi:check-circle',
   'error': 'mdi:alert-circle',
   'completed': 'mdi:check',
+  'stop': 'mdi:stop',
+  'cancel': 'mdi:cancel',
+  'close': 'mdi:close',
 
   // 其他
   'more': 'mdi:dots-vertical',

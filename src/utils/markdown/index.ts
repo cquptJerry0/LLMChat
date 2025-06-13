@@ -3,6 +3,7 @@ import mdLinkAttributes from 'markdown-it-link-attributes'
 import { full as emoji } from 'markdown-it-emoji'
 import { configureHighlight, highlightCode } from './highlight'
 import { generateCodeBlockHtml, generateInlineCodeHtml } from './template'
+import { processMarkdownWithCursor, replaceCursorMarker } from './cursor'
 import './styles.scss'
 
 // 配置 highlight.js
@@ -18,7 +19,7 @@ const md: MarkdownIt = new MarkdownIt({
       try {
         const highlighted = highlightCode(str, lang)
         return generateCodeBlockHtml(highlighted, lang)
-      } catch (__) {}
+      } catch (__) { }
     }
     return generateInlineCodeHtml(md.utils.escapeHtml(str))
   },
@@ -39,6 +40,20 @@ md.use(emoji)
 export const renderMarkdown = (content: string): string => {
   if (!content) return ''
   return md.render(content)
+}
+
+// 带光标效果的Markdown渲染
+export const renderMarkdownWithCursor = (content: string): string => {
+  if (!content) return ''
+
+  // 处理Markdown内容，在适当位置插入光标
+  const processed = processMarkdownWithCursor(content, true)
+
+  // 渲染处理后的内容
+  const rendered = md.render(processed)
+
+  // 替换特殊光标标记
+  return replaceCursorMarker(rendered)
 }
 
 // 导出 markdown-it 实例，以便需要时进行更多配置

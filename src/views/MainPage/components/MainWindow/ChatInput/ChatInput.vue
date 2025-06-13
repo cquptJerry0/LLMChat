@@ -2,8 +2,7 @@
 import { ref, computed, watch } from 'vue'
 import { useConversationControlChild } from '@/composables/useConversationControl'
 import ChatButton from '@/components/ChatButton.vue'
-import ChatIcon from '@/components/ChatIcon.vue'
-
+import { useStreamControl } from '@/composables/useStreamControl'
 // 使用父组件提供的会话控制
 const { state, messageActions } = useConversationControlChild()
 
@@ -11,6 +10,8 @@ const { state, messageActions } = useConversationControlChild()
 const inputContent = ref('')
 const textareaRows = ref(3)
 
+// 图标样式
+const started = ref(false)
 // 监听输入内容变化，自动调整行数
 watch(inputContent, (newValue) => {
   // 计算换行符数量
@@ -23,6 +24,33 @@ watch(inputContent, (newValue) => {
 const isGenerating = computed(() => {
   return state.value.isGenerating
 })
+
+// 按钮图标和文本
+const buttonProps = computed(() => {
+  if (isGenerating.value) {
+    return {
+      icon: 'stop',
+      text: '停止生成'
+    }
+  }
+  return {
+    icon: 'send',
+    text: '发送'
+  }
+})
+
+// 处理按钮点击
+const handleClick = () => {
+  if (isGenerating.value) {
+    // 如果正在生成，则取消生成
+    if (state.value.lastAssistantMessageId) {
+      useStreamControl(state.value.lastAssistantMessageId).cancel()
+    }
+  } else {
+    // 如果没有生成，则发送消息
+    sendMessage()
+  }
+}
 
 // 发送消息
 const sendMessage = async () => {
@@ -82,11 +110,12 @@ const handleKeyDown = (event: KeyboardEvent) => {
         </div>
         <div class="chat-input__send">
           <ChatButton
-            type="primary"
-            :disabled="!inputContent.trim() || isGenerating"
-            @click="sendMessage"
+            :type="isGenerating ? 'danger' : 'primary'"
+            :disabled="!inputContent.trim() && !isGenerating"
+            @click="handleClick"
+            :icon="buttonProps.icon"
           >
-            发送
+            {{ buttonProps.text }}
           </ChatButton>
         </div>
       </div>
@@ -184,7 +213,6 @@ const handleKeyDown = (event: KeyboardEvent) => {
     &-icon {
       width: 16px;
       height: 16px;
-      background: url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTYiIGhlaWdodD0iMTYiIHZpZXdCb3g9IjAgMCAxNiAxNiIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTggMTZDMTIuNDE4MyAxNiAxNiAxMi40MTgzIDE2IDhDMTYgMy41ODE3MiAxMi40MTgzIDAgOCAwQzMuNTgxNzIgMCAwIDMuNTgxNzIgMCA4QzAgMTIuNDE4MyAzLjU4MTcyIDE2IDggMTZaTTggMTQuNUMxMS41ODk5IDE0LjUgMTQuNSAxMS41ODk5IDE0LjUgOEMxNC41IDQuNDEwMTUgMTEuNTg5OSAxLjUgOCAxLjVDNC40MTAxNSAxLjUgMS41IDQuNDEwMTUgMS41IDhDMS41IDExLjU4OTkgNC40MTAxNSAxNC41IDggMTQuNVpNOCA0QzguNDEwMjEgNCA4Ljc1IDQuMzM5NzkgOC43NSA0Ljc1VjcuMjVIMTEuMjVDMTEuNjYwMiA3LjI1IDEyIDcuNTg5NzkgMTIgOEMxMiA4LjQxMDIxIDExLjY2MDIgOC43NSAxMS4yNSA4Ljc1SDguNzVWMTEuMjVDOC43NSAxMS42NjAyIDguNDEwMjEgMTIgOCAxMkM3LjU4OTc5IDEyIDcuMjUgMTEuNjYwMiA3LjI1IDExLjI1VjguNzVINC43NUM0LjMzOTc5IDguNzUgNCA4LjQxMDIxIDQgOEM0IDcuNTg5NzkgNC4zMzk3OSA3LjI1IDQuNzUgNy4yNUg3LjI1VjQuNzVDNy4yNSA0LjMzOTc5IDcuNTg5NzkgNCA4IDRaIiBmaWxsPSIjMDAwMDAwNzMiLz4KPC9zdmc+Cg==') center/contain no-repeat;
     }
   }
 
@@ -200,18 +228,6 @@ const handleKeyDown = (event: KeyboardEvent) => {
     &:hover {
       opacity: 0.85;
     }
-  }
-
-  &__globe-icon {
-    background: url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTYiIGhlaWdodD0iMTYiIHZpZXdCb3g9IjAgMCAxNiAxNiIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTggMTZDMTIuNDE4MyAxNiAxNiAxMi40MTgzIDE2IDhDMTYgMy41ODE3MiAxMi40MTgzIDAgOCAwQzMuNTgxNzIgMCAwIDMuNTgxNzIgMCA4QzAgMTIuNDE4MyAzLjU4MTcyIDE2IDggMTZaTTggMTQuNUMxMS41ODk5IDE0LjUgMTQuNSAxMS41ODk5IDE0LjUgOEMxNC41IDQuNDEwMTUgMTEuNTg5OSAxLjUgOCAxLjVDNC40MTAxNSAxLjUgMS41IDQuNDEwMTUgMS41IDhDMS41IDExLjU4OTkgNC40MTAxNSAxNC41IDggMTQuNVpNOCA0QzguNDEwMjEgNCA4Ljc1IDQuMzM5NzkgOC43NSA0Ljc1VjcuMjVIMTEuMjVDMTEuNjYwMiA3LjI1IDEyIDcuNTg5NzkgMTIgOEMxMiA4LjQxMDIxIDExLjY2MDIgOC43NSAxMS4yNSA4Ljc1SDguNzVWMTEuMjVDOC43NSAxMS42NjAyIDguNDEwMjEgMTIgOCAxMkM3LjU4OTc5IDEyIDcuMjUgMTEuNjYwMiA3LjI1IDExLjI1VjguNzVINC43NUM0LjMzOTc5IDguNzUgNCA4LjQxMDIxIDQgOEM0IDcuNTg5NzkgNC4zMzk3OSA3LjI1IDQuNzUgNy4yNUg3LjI1VjQuNzVDNy4yNSA0LjMzOTc5IDcuNTg5NzkgNCA4IDRaIiBmaWxsPSIjMDAwMDAwIi8+Cjwvc3ZnPgo=') center/contain no-repeat;
-  }
-
-  &__link-icon {
-    background: url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTYiIGhlaWdodD0iMTYiIHZpZXdCb3g9IjAgMCAxNiAxNiIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTYuNSA0LjVDNi41IDMuMTE5MjkgNy42MTkyOSAyIDkgMkMxMC4zODA3IDIgMTEuNSAzLjExOTI5IDExLjUgNC41QzExLjUgNS44ODA3MSAxMC4zODA3IDcgOSA3QzcuNjE5MjkgNyA2LjUgNS44ODA3MSA2LjUgNC41Wk05IDMuNUM4LjQ0NzcyIDMuNSA4IDMuOTQ3NzIgOCA0LjVDOCA1LjA1MjI4IDguNDQ3NzIgNS41IDkgNS41QzkuNTUyMjggNS41IDEwIDUuMDUyMjggMTAgNC41QzEwIDMuOTQ3NzIgOS41NTIyOCAzLjUgOSAzLjVaTTQuNSA5QzQuNSA3LjYxOTI5IDUuNjE5MjkgNi41IDcgNi41QzguMzgwNzEgNi41IDkuNSA3LjYxOTI5IDkuNSA5QzkuNSAxMC4zODA3IDguMzgwNzEgMTEuNSA3IDExLjVDNS42MTkyOSAxMS41IDQuNSAxMC4zODA3IDQuNSA5Wk03IDhDNi40NDc3MiA4IDYgOC40NDc3MiA2IDlDNiA5LjU1MjI4IDYuNDQ3NzIgMTAgNyAxMEM3LjU1MjI4IDEwIDggOS41NTIyOCA4IDlDOCA4LjQ0NzcyIDcuNTUyMjggOCA3IDhaIiBmaWxsPSIjMDAwMDAwIi8+Cjwvc3ZnPgo=') center/contain no-repeat;
-  }
-
-  &__image-icon {
-    background: url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTYiIGhlaWdodD0iMTYiIHZpZXdCb3g9IjAgMCAxNiAxNiIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTIgNEMyIDIuODk1NDMgMiA0IDJIMTJDMTMuMTA0NiAyIDE0IDIuODk1NDMgMTQgNFYxMkMxNCAxMy4xMDQ2IDEzLjEwNDYgMTQgMTIgMTRIMjBDMi44OTU0MyAxNCAyIDEzLjEwNDYgMiAxMlY0Wk00IDEwSDUuNTg1N0w3LjI5MjkgOC4yOTI4OUM3LjY4MzQyIDcuOTAyMzcgOC4zMTY1OCA3LjkwMjM3IDguNzA3MTEgOC4yOTI4OUwxMiAxMS41ODU4VjRDMTIgNC41NTIyOCAxMS41NTIzIDUgMTEgNUg1QzQuNDQ3NzIgNSA0IDQuNTUyMjggNCA0VjEwWk00IDEyVjExLjQxNDJMOCA3LjQxNDIxTDEyIDExLjQxNDJWMTJDMTIgMTIuNTUyMyAxMS41NTIzIDEzIDExIDEzSDVDNC40NDc3MiAxMyA0IDEyLjU1MjMgNCAxMlpNNiA2QzYgNi41NTIyOCA2LjQ0NzcyIDcgNyA3QzcuNTUyMjggNyA4IDYuNTUyMjggOCA2QzggNS40NDc3MiA3LjU1MjI4IDUgNyA1QzYuNDQ3NzIgNSA2IDUuNDQ3NzIgNiA2WiIgZmlsbD0iIzAwMDAwMCIvPgo8L3N2Zz4K') center/contain no-repeat;
   }
 
   :deep(.chat-button) {

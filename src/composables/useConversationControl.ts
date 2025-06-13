@@ -168,7 +168,7 @@ export function useConversationControl(
       lastAssistantMessageId.value = result.messageId
 
       const streamControl = useStreamControl(result.messageId)
-      if (streamControl.isIncomplete.value) {
+      if (streamControl.state.value.isIncomplete) {
         isGenerating.value = true
       }
 
@@ -210,11 +210,6 @@ export function useConversationControl(
       // 为将来的扩展预留接口
       // 例如：const shareLink = apiService.generateShareLink(messageId)
     },
-
-    // 新增：获取流控制
-    getStreamControl: (messageId: string) => {
-      return useStreamControl(messageId)
-    }
   }
 
   /**

@@ -1,3 +1,6 @@
+import { ComputedRef } from 'vue'
+import type { UpdateCallback } from './api'
+
 /**
  * 流状态的可能值
  */
@@ -6,7 +9,7 @@ type StreamStatus = 'streaming' | 'paused' | 'completed' | 'error'
 /**
  * 流数据的完整状态定义
  */
-interface StreamState {
+export interface StreamState {
   /** 消息的文本内容 */
   content: string;
   /** 推理过程的文本内容 */
@@ -21,6 +24,16 @@ interface StreamState {
   error?: string;
   /** 时间戳，用于恢复时计算经过的时间 */
   timestamp: number;
+  /** 流是否暂停中 */
+  isPaused: boolean;
+  /** 流是否生成中 */
+  isStreaming: boolean;
+  /** 流是否出错 */
+  isError: boolean;
+  /** 流是否未完成（处于流或暂停状态） */
+  isIncomplete: boolean;
+  /** 流是否已完成 */
+  isCompleted: boolean;
 }
 
 /**
@@ -48,43 +61,28 @@ interface StreamControlOptions {
 /**
  * 提供给子组件的控制接口
  */
-interface StreamControlContext {
+export interface StreamControlContext {
   /** 当前流状态 */
   state: ComputedRef<StreamState>;
   /** 控制方法 */
   controls: {
     /** 暂停生成 */
-    pause: () => AbortController | null;
+    pause: () => void;
     /** 恢复生成 */
     resume: (updateCallback: UpdateCallback) => Promise<void>;
     /** 取消生成 */
-    cancel: () => boolean;
+    cancel: () => void;
   };
 }
 
 /**
  * 返回值类型定义
  */
-interface StreamControlReturn {
-  /** 完整状态 */
-  state: ComputedRef<StreamState>;
-  /** 是否暂停中 */
-  isPaused: ComputedRef<boolean>;
-  /** 是否生成中 */
-  isStreaming: ComputedRef<boolean>;
-  /** 是否出错 */
-  isError: ComputedRef<boolean>;
-  /** 错误信息 */
-  errorMessage: ComputedRef<string | undefined>;
-  /** 是否未完成（流或暂停状态） */
-  isIncomplete: ComputedRef<boolean>;
-
-  /** 暂停生成，返回中断控制器 */
-  pause: () => AbortController | null;
-  /** 恢复生成 */
-  resume: (updateCallback: UpdateCallback) => Promise<void>;
-  /** 取消生成，返回是否成功取消 */
-  cancel: () => boolean;
+export interface StreamControlReturn {
+  state: ComputedRef<StreamState>
+  pause: () => void
+  resume: (updateCallback: UpdateCallback) => Promise<void>
+  cancel: () => void
 }
 
 /**

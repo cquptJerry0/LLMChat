@@ -30,7 +30,6 @@ export interface MessageActions {
   copyMessage: (messageId: string) => boolean
   likeMessage: (messageId: string, isLike: boolean) => void
   shareMessage: (messageId: string) => void
-  getStreamControl: (messageId: string) => StreamControlReturn
 }
 
 // 会话控制器配置选项

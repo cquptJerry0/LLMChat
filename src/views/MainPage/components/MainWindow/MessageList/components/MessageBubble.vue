@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { computed, inject } from 'vue'
+import { computed } from 'vue'
 import { useConversationControlChild } from '@/composables/useConversationControl'
+import { useStreamControl } from '@/composables/useStreamControl'
 import UserBubble from './UserBubble.vue'
 import AssistantBubble from './AssistantBubble.vue'
 
@@ -19,38 +20,32 @@ const props = defineProps<{
 // 使用父组件提供的会话控制
 const { messageActions } = useConversationControlChild()
 
-// 注入 getStreamControl 函数
-const getStreamControlFn = inject<(messageId: string) => any>('getStreamControl') || messageActions.getStreamControl
-
-// 获取流控制
-const streamControl = computed(() => {
+// 创建流状态的计算属性
+const streamState = computed(() => {
+  // 如果不是助手消息，返回默认状态
   if (props.message.role !== 'assistant') {
     return {
-      isStreaming: { value: false },
-      isPaused: { value: false },
-      isError: { value: false },
-      isComplete: { value: true },
-      isIncomplete: { value: false }
+      isStreaming: false,
+      isPaused: false,
+      isError: false,
+      isCompleted: true,
+      isIncomplete: false
     }
   }
 
   try {
-    const control = getStreamControlFn(props.message.id)
-    return control || {
-      isStreaming: { value: false },
-      isPaused: { value: false },
-      isError: { value: false },
-      isComplete: { value: true },
-      isIncomplete: { value: false }
-    }
+    // 直接使用useStreamControl获取流控制状态
+    const { state } = useStreamControl(props.message.id)
+    return state.value
   } catch (error) {
-    console.error('获取流控制失败:', error)
+    // 如果失败，返回错误状态
+    console.error('获取流控制失败:', props.message.id, error)
     return {
-      isStreaming: { value: false },
-      isPaused: { value: false },
-      isError: { value: true },
-      isComplete: { value: false },
-      isIncomplete: { value: false }
+      isStreaming: false,
+      isPaused: false,
+      isError: true,
+      isCompleted: false,
+      isIncomplete: false
     }
   }
 })
@@ -93,9 +88,9 @@ const handleShare = () => {
       v-else
       :content="message.content"
       :reasoning-content="message.reasoning_content"
-      :is-streaming="streamControl.isStreaming?.value || false"
-      :is-error="streamControl.isError?.value || false"
-      :is-paused="streamControl.isPaused?.value || false"
+      :is-streaming="streamState.isStreaming"
+      :is-error="streamState.isError"
+      :is-paused="streamState.isPaused"
       :avatar="'https://t8.baidu.com/it/u=4011543194,454374607&fm=193'"
       @copy="handleCopy"
       @retry="handleRetry"

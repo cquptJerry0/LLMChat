@@ -1,36 +1,24 @@
 <script setup lang="ts">
-import { onMounted, ref, provide, computed, watch, nextTick, onUnmounted } from 'vue'
+import { onMounted, ref, onUnmounted } from 'vue'
 import { useTheme } from '@/composables/useTheme'
 import { useConversationControl } from '@/composables/useConversationControl'
 import { useNormalizedChatStore } from '@/stores/normalizedChat'
-import { useStreamStore } from '@/stores/stream'
 import { Monitor, Close } from '@element-plus/icons-vue'
 import ChatLayout from './layout/ChatLayout.vue'
 import StreamMonitor from '@/components/StreamMonitor.vue'
 
+// 初始化核心存储
+const chatStore = useNormalizedChatStore()
+
 // 初始化主题
 const { currentTheme, setTheme } = useTheme()
 
-// 初始化核心存储
-const chatStore = useNormalizedChatStore()
-const streamStore = useStreamStore()
-
 // 初始化会话控制
-const conversationControl = useConversationControl({
-  chatStore: useNormalizedChatStore,
-  streamStore: useStreamStore
-})
-
-// 提供全局依赖注入，使子组件可以通过 inject 获取
-provide('conversationControl', conversationControl)
-provide('getStreamControl', conversationControl.messageActions.getStreamControl)
-
-// 获取会话状态
 const {
   state: conversationState,
   conversationActions,
   messageActions
-} = conversationControl
+} = useConversationControl()
 
 // 控制 StreamMonitor 的显示状态
 const showStreamMonitor = ref(false)
@@ -42,25 +30,12 @@ const toggleStreamMonitor = () => {
 const isOnline = ref(navigator.onLine)
 const handleNetworkChange = () => {
   isOnline.value = navigator.onLine
-  if (isOnline.value) {
-    // 网络恢复时尝试恢复流
-    const lastAssistantId = conversationState.value.lastAssistantMessageId
-    if (lastAssistantId) {
-      const streamControl = messageActions.getStreamControl(lastAssistantId)
-      if (streamControl && streamControl.isIncomplete.value) {
-        console.log('尝试恢复中断的流...')
-      }
-    }
-  }
 }
 
 // 全局事件监听 - 页面可见性变化
 const handleVisibilityChange = () => {
   if (document.visibilityState === 'visible') {
     // 页面重新可见时刷新状态
-    chatStore.initializeFromStorage()
-
-    // 尝试恢复最后一条助手消息
     messageActions.restoreLastAssistant()
   }
 }
@@ -85,14 +60,6 @@ onUnmounted(() => {
   window.removeEventListener('online', handleNetworkChange)
   window.removeEventListener('offline', handleNetworkChange)
   document.removeEventListener('visibilitychange', handleVisibilityChange)
-})
-
-// 监听会话切换
-watch(() => conversationState.value.currentConversationId, (newId, oldId) => {
-  if (newId && newId !== oldId) {
-    console.log(`会话已切换: ${oldId} -> ${newId}`)
-    // 这里可以添加会话切换后的处理逻辑
-  }
 })
 
 // 导出会话数据方法

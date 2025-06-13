@@ -1,16 +1,36 @@
 <script setup lang="ts">
 import { md } from '@/utils/markdown'
-import { computed } from 'vue'
+import { ref, watch } from 'vue'
 
 const props = defineProps<{
   content: string
 }>()
 
-// 渲染 Markdown
-const renderedContent = computed(() => {
-  if (!props.content) return ''
-  return md.render(props.content)
-})
+// 渲染内容
+const renderedContent = ref('')
+
+// 使用 requestIdleCallback 渲染 Markdown
+const renderMarkdown = (content: string) => {
+  if (!content) {
+    renderedContent.value = ''
+    return
+  }
+
+  const requestIdleCallback =
+    window.requestIdleCallback ||
+    ((cb) => setTimeout(cb, 1))
+
+  requestIdleCallback(() => {
+    renderedContent.value = md.render(content)
+  })
+}
+
+// 监听内容变化
+watch(
+  () => props.content,
+  (newContent) => renderMarkdown(newContent),
+  { immediate: true }
+)
 </script>
 
 <template>
