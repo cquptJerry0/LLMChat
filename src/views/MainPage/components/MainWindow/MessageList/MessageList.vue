@@ -2,9 +2,13 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import { useConversationControlChild } from '@/composables/useConversationControl'
 import MessageBubble from './components/MessageBubble.vue'
+import { useStreamControl } from '@/composables/useStreamControl_'
 
 // 使用父组件提供的会话控制
 const { state: conversationState } = useConversationControlChild()
+
+// 初始化流控制
+useStreamControl(conversationState.value.lastAssistantMessageId || '')
 
 // 消息列表容器引用
 const messageListRef = ref<HTMLDivElement | null>(null)
@@ -17,6 +21,12 @@ const messages = computed(() => {
 // 是否正在生成
 const isGenerating = computed(() => {
   return conversationState.value.isGenerating
+})
+
+// 计算最后一条消息的ID
+const lastMessageId = computed(() => {
+  if (messages.value.length === 0) return null
+  return messages.value[messages.value.length - 1].id
 })
 
 // 自动滚动到底部
@@ -61,6 +71,7 @@ onMounted(() => {
         v-for="message in messages"
         :key="message.id"
         :message="message"
+        :is-latest-message="message.id === lastMessageId"
       />
     </template>
   </div>

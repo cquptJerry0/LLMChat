@@ -1,252 +1,269 @@
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { Sender } from 'vue-element-plus-x'
+import type { CSSProperties } from 'vue'
 import { useConversationControlChild } from '@/composables/useConversationControl'
+import { useNormalizedChatStore } from '@/stores/normalizedChat'
+import { useStreamControlChild } from '@/composables/useStreamControl_'
+import type { StreamControlContext } from '@/types/streamControl'
+import type { UpdateCallback } from '@/types/api'
+import { chatService } from '@/services/chat/chatService'
 import ChatButton from '@/components/ChatButton.vue'
-import { useStreamControl } from '@/composables/useStreamControl'
-// 使用父组件提供的会话控制
-const { state, messageActions } = useConversationControlChild()
 
-// 输入框内容
-const inputContent = ref('')
-const textareaRows = ref(3)
+// 输入框内容和状态
+const senderValue = ref('')
+const senderRef = ref()
+const inputStyle: CSSProperties = {
+  backgroundColor: 'transparent',
+  color: '#303133',
+  fontSize: '14px',
+  fontWeight: 500,
+  minHeight: '150px'
+}
 
-// 图标样式
-const started = ref(false)
-// 监听输入内容变化，自动调整行数
-watch(inputContent, (newValue) => {
-  // 计算换行符数量
-  const lineBreaks = (newValue.match(/\n/g) || []).length
-  // 根据内容自动调整行数，最小3行，最大10行
-  textareaRows.value = Math.max(3, Math.min(10, lineBreaks + 1))
+// 获取会话控制
+const { messageActions } = useConversationControlChild()
+
+// 获取流控制
+const streamControl = useStreamControlChild() as any // 临时使用any类型避免类型错误
+const { state: streamState } = streamControl
+
+// 计算占位符文本
+const placeholder = computed(() => {
+  return streamState.value.isStreaming
+    ? '正在生成回复，按 Esc 中断...'
+    : streamState.value.isPaused
+      ? '生成已中断，按 Ctrl+R 继续...'
+      : '输入消息，按 Ctrl+Enter 发送...'
 })
 
-// 是否正在生成
-const isGenerating = computed(() => {
-  return state.value.isGenerating
+// 处理发送按钮图标颜色
+const sendButtonIconColor = computed(() => {
+  return !senderValue.value.trim() ? 'var(--icon-color)' : 'var(--icon-color-secondary)'
 })
 
-// 按钮图标和文本
-const buttonProps = computed(() => {
-  if (isGenerating.value) {
-    return {
-      icon: 'stop',
-      text: '停止生成'
-    }
-  }
-  return {
-    icon: 'send',
-    text: '发送'
-  }
-})
+// 处理发送消息
+const handleSend = async () => {
+  if (!senderValue.value.trim()) return
 
-// 处理按钮点击
-const handleClick = () => {
-  if (isGenerating.value) {
-    // 如果正在生成，则取消生成
-    if (state.value.lastAssistantMessageId) {
-      useStreamControl(state.value.lastAssistantMessageId).cancel()
-    }
-  } else {
-    // 如果没有生成，则发送消息
-    sendMessage()
+  try {
+    // 发送消息
+    const content = senderValue.value.trim()
+    await messageActions.send(content)
+
+    // 清空输入框
+    senderRef.value?.clear()
+  } catch (error) {
+    console.error('发送消息失败:', error)
   }
 }
 
-// 发送消息
-const sendMessage = async () => {
-  if (!inputContent.value.trim() || isGenerating.value) return
-
-  const content = inputContent.value
-  inputContent.value = ''
-  textareaRows.value = 3 // 重置行数
-
-  await messageActions.send(content)
+// 中断生成
+const handleStop = () => {
+  if (streamState.value.isStreaming && streamState.value.messageId) {
+    // 只暂停流，不中断请求
+    streamControl.pauseStream()
+  }
 }
 
-// 处理按键事件
-const handleKeyDown = (event: KeyboardEvent) => {
-  // 按下 Ctrl+Enter 发送消息
+// 恢复生成
+const handleResume = async () => {
+  if (streamState.value.isPaused && streamState.value.messageId) {
+    // 使用简单恢复方法，不重新创建请求
+    const success = streamControl.simpleResumeStream()
+
+    if (!success) {
+      console.warn('简单恢复失败，尝试完整恢复流程')
+      try {
+        // 创建回调函数
+        const updateCallback: UpdateCallback = (
+          content,
+          reasoning_content,
+          completion_tokens,
+          speed
+        ) => {
+          // 使用 updateStream 更新内容
+          streamControl.updateStream(
+            content,
+            reasoning_content,
+            completion_tokens,
+            speed
+          )
+        }
+
+        // 使用 chatService 恢复生成
+        const chatStore = useNormalizedChatStore()
+        const messageId = streamState.value.messageId
+        const message = chatStore.messages.get(messageId)
+        if (message?.parentId) {
+          const messageHistory = chatStore.getMessageHistory(message.parentId)
+          await chatService.resumeChatCompletion(
+            messageHistory,
+            messageId,
+            updateCallback
+          )
+        }
+      } catch (error) {
+        console.error('恢复生成失败:', error)
+        streamControl.setStreamError('恢复生成失败')
+      }
+    }
+  }
+}
+
+// 处理语音识别状态变化
+const handleRecordingChange = (isRecording: boolean) => {
+  console.log('语音识别状态:', isRecording)
+}
+
+// 处理键盘事件
+const handleKeydown = (event: KeyboardEvent) => {
+  // 如果是在输入法编辑状态，不处理快捷键
+  if (event.isComposing) return
+
+  // Ctrl+Enter 发送消息
   if (event.ctrlKey && event.key === 'Enter') {
     event.preventDefault()
-    sendMessage()
+    event.stopPropagation()
+    handleSend()
+    return
+  }
+
+  // Ctrl+R 继续生成
+  if (event.ctrlKey && event.key === 'r' && streamState.value.isPaused) {
+    event.preventDefault()
+    event.stopPropagation()
+    handleResume()
   }
 }
+
+// 移除全局键盘事件监听，因为已经在MainWindow中处理了
 </script>
 
 <template>
-  <div class="chat-input">
-    <div class="chat-input__container">
-      <!-- 输入框 -->
-      <div class="chat-input__textarea-container">
-        <el-input
-          v-model="inputContent"
-          type="textarea"
-          :rows="textareaRows"
-          :placeholder="isGenerating ? '正在生成回复...' : '随时@你想要的 Kimi+ 使用各种能力'"
-          :disabled="isGenerating"
-          resize="none"
-          @keydown="handleKeyDown"
-        />
-      </div>
+  <div class="chat-input-wrapper">
+    <div class="textarea-container">
+      <Sender
+        ref="senderRef"
+        v-model="senderValue"
+        variant="updown"
+        :auto-size="{ minRows: 3, maxRows: 8 }"
+        :input-style="inputStyle"
+        class="custom-sender"
+        :placeholder="placeholder"
+        :loading="streamState.isStreaming"
+        clearable
+        :submitType=undefined
+        :submit-btn-disabled="!senderValue.trim()"
+        @keydown="handleKeydown"
+        @submit="handleSend"
+        @cancel="handleStop"
+        @recording-change="handleRecordingChange"
+        allow-speech
+      >
+        <template #prefix>
+        </template>
 
-      <!-- 底部工具栏 -->
-      <div class="chat-input__toolbar">
-        <div class="chat-input__tools">
-          <el-tooltip content="长度参考" placement="top">
-            <div class="chat-input__length">
-              <i class="chat-input__length-icon" />
-              <span>k1.5</span>
-            </div>
-          </el-tooltip>
-          <el-tooltip content="全球" placement="top">
-            <i class="chat-input__globe-icon" />
-          </el-tooltip>
-          <el-tooltip content="链接" placement="top">
-            <i class="chat-input__link-icon" />
-          </el-tooltip>
-          <el-tooltip content="图片" placement="top">
-            <i class="chat-input__image-icon" />
-          </el-tooltip>
+        <template #action-list>
+          <div class="button-group">
+            <ChatButton
+              icon="image"
+              text
+              tooltip="图片"
+            />
+            <ChatButton
+              icon="attachment"
+              text
+              tooltip="附件"
+            />
+            <ChatButton
+              v-if="!streamState.isStreaming && !streamState.isPaused"
+              icon="send"
+              type="primary"
+              tooltip="发送 (Ctrl+Enter)"
+              :iconColor="sendButtonIconColor"
+              circle
+              :disabled="!senderValue.trim()"
+              @click="handleSend"
+            />
+            <ChatButton
+              v-else-if="streamState.isStreaming"
+              icon="pause"
+              type="warning"
+              tooltip="中断生成 (Esc)"
+              iconColor="var(--icon-color-secondary)"
+              circle
+              @click="handleStop"
+            />
+            <ChatButton
+              v-else-if="streamState.isPaused"
+              icon="play"
+              type="success"
+              tooltip="继续生成 (Ctrl+R)"
+              iconColor="var(--icon-color-secondary)"
+              circle
+              @click="handleResume"
+            />
         </div>
-        <div class="chat-input__send">
-          <ChatButton
-            :type="isGenerating ? 'danger' : 'primary'"
-            :disabled="!inputContent.trim() && !isGenerating"
-            @click="handleClick"
-            :icon="buttonProps.icon"
-          >
-            {{ buttonProps.text }}
-          </ChatButton>
-        </div>
-      </div>
+        </template>
+      </Sender>
     </div>
   </div>
 </template>
 
-<style lang="scss" scoped>
-.chat-input {
-  width: 100%;
-  height: 100%;
+<style scoped lang="scss">
+.chat-input-wrapper {
   display: flex;
-  align-items: center;
-  background-color: #fff;
-
-  &__container {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    padding: 12px 16px;
-    background-color: #fff;
-    width: 100%;
-    max-width: 768px;
-    margin: 0 auto;
-    border-radius: 8px;
-  }
-
-  &__textarea-container {
-    width: 100%;
-    background: #fff;
-    border-radius: 8px;
-    border: 1px solid transparent;
-    transition: all 0.3s ease;
-
-    &:hover {
-      border-color: rgba(0, 0, 0, 0.1);
-    }
-
-    &:focus-within {
-      border-color: #1677ff;
-      box-shadow: 0 0 0 2px rgba(22, 119, 255, 0.1);
-    }
-
-    :deep(.el-textarea__inner) {
-      min-height: 46px;
-      padding: 11px 16px;
-      resize: none;
-      border: none;
-      background-color: transparent;
-      transition: none;
-      font-size: 14px;
-      line-height: 1.6;
-      font-family: -apple-system, BlinkMacSystem, sans-serif;
-      color: #000000E6;
-
-      &::placeholder {
-        color: #00000073;
-      }
-
-      &:focus {
-        box-shadow: none;
-      }
-    }
-  }
-
-  &__toolbar {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 0 4px;
-    height: 32px;
-  }
-
-  &__tools {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-  }
-
-  &__length {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    font-size: 12px;
-    color: #00000073;
-    cursor: help;
-    padding: 4px;
-    border-radius: 4px;
-    transition: all 0.2s ease;
-
-    &:hover {
-      background-color: rgba(0, 0, 0, 0.04);
-    }
-
-    &-icon {
-      width: 16px;
-      height: 16px;
-    }
-  }
-
-  &__globe-icon,
-  &__link-icon,
-  &__image-icon {
-    width: 16px;
-    height: 16px;
-    cursor: pointer;
-    opacity: 0.45;
-    transition: all 0.2s ease;
-
-    &:hover {
-      opacity: 0.85;
-    }
-  }
-
-  :deep(.chat-button) {
-    height: 32px;
-    padding: 0 16px;
-    border-radius: 6px;
-    font-size: 14px;
-
-    &.el-button--primary {
-      background-color: #1677ff;
-
-      &:hover {
-        background-color: #4096ff;
-      }
-
-      &:active {
-        background-color: #0958d9;
-      }
-    }
+  flex-direction: column;
+  width: 100%;
+  position: relative;
+  min-height: 150px;
+  :deep(*) {
+    --el-color-primary: var(--text-secondary) !important;
   }
 }
+
+.textarea-container {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+    width: 100%;
+}
+
+:deep(.el-sender) {
+  border-radius: 20px !important;
+  background-color: var(--background-color-light) !important;
+  }
+
+:deep(.el-textarea__inner) {
+  flex: 1;
+    overflow-y: auto;
+    padding: 8px 0;
+
+    &::-webkit-scrollbar {
+      width: 4px;
+    }
+
+    &::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    &::-webkit-scrollbar-thumb {
+      background: var(--border-color-base);
+      border-radius: 2px;
+
+      &:hover {
+        background: var(--border-color-dark);
+      }
+    }
+  }
+
+.button-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
 </style>
+

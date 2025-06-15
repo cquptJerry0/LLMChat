@@ -10,6 +10,8 @@ type StreamStatus = 'streaming' | 'paused' | 'completed' | 'error'
  * 流数据的完整状态定义
  */
 export interface StreamState {
+  /** 当前消息ID */
+  messageId?: string;
   /** 消息的文本内容 */
   content: string;
   /** 推理过程的文本内容 */
@@ -69,9 +71,11 @@ export interface StreamControlContext {
     /** 暂停生成 */
     pause: () => void;
     /** 恢复生成 */
-    resume: (updateCallback: UpdateCallback) => Promise<void>;
+    resume: (updateCallback?: UpdateCallback) => Promise<void>;
     /** 取消生成 */
     cancel: () => void;
+    /** 更新当前控制的消息ID */
+    updateMessageId: (messageId: string) => void;
   };
 }
 
@@ -81,8 +85,9 @@ export interface StreamControlContext {
 export interface StreamControlReturn {
   state: ComputedRef<StreamState>
   pause: () => void
-  resume: (updateCallback: UpdateCallback) => Promise<void>
+  resume: (updateCallback?: UpdateCallback) => Promise<void>
   cancel: () => void
+  updateMessageId: (messageId: string) => void
 }
 
 /**

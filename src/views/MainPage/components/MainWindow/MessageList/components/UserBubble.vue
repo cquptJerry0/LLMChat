@@ -1,44 +1,13 @@
 <script setup lang="ts">
-import { md } from '@/utils/markdown'
-import { ref, watch } from 'vue'
-
 const props = defineProps<{
   content: string
 }>()
-
-// 渲染内容
-const renderedContent = ref('')
-
-// 使用 requestIdleCallback 渲染 Markdown
-const renderMarkdown = (content: string) => {
-  if (!content) {
-    renderedContent.value = ''
-    return
-  }
-
-  const requestIdleCallback =
-    window.requestIdleCallback ||
-    ((cb) => setTimeout(cb, 1))
-
-  requestIdleCallback(() => {
-    renderedContent.value = md.render(content)
-  })
-}
-
-// 监听内容变化
-watch(
-  () => props.content,
-  (newContent) => renderMarkdown(newContent),
-  { immediate: true }
-)
 </script>
 
 <template>
   <div class="user-wrapper">
     <div class="user-container">
-      <div class="user-content">
-        <div class="markdown-content" v-html="renderedContent"></div>
-      </div>
+      <div class="user-content">{{ content }}</div>
     </div>
   </div>
 </template>
@@ -47,12 +16,10 @@ watch(
 .user-wrapper {
   display: flex;
   justify-content: flex-end;
-  width: 100%;
-  margin: 4px 0;
+  max-width: 624px;
 }
 
 .user-container {
-  max-width: 780px;
   min-height: 46px;
   background-color: var(--background-color-base);
   border-radius: 16px;
@@ -62,17 +29,13 @@ watch(
 
 .user-content {
   color: #000000E6;
-  padding: 0 11px;
+  padding: $spacing-small $spacing-base;
   font-size: 16px;
-  line-height: 0.8;
   font-family: -apple-system, BlinkMacSystem, sans-serif;
   border-radius: 16px 4px 16px 16px;
-
-  :deep(.markdown-body) {
-    background-color: transparent;
-    font-size: 16px;
-    line-height: 0.8;
-  }
+  white-space: pre-wrap;  // 保留换行和空格
+  word-break: break-word; // 长单词换行
+  line-height: 1.5;       // 行高
 }
 
 // 适配暗色主题

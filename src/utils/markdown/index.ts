@@ -1,60 +1,38 @@
 import MarkdownIt from 'markdown-it'
-import mdLinkAttributes from 'markdown-it-link-attributes'
-import { full as emoji } from 'markdown-it-emoji'
-import { configureHighlight, highlightCode } from './highlight'
-import { generateCodeBlockHtml, generateInlineCodeHtml } from './template'
-import { processMarkdownWithCursor, replaceCursorMarker } from './cursor'
+import hljs from 'highlight.js'
 import './styles.scss'
+import { processMarkdown, replaceCursorMarkers } from './cursor'
 
-// 配置 highlight.js
-configureHighlight()
-
-// 创建 markdown-it 实例
-const md: MarkdownIt = new MarkdownIt({
-  html: true, // 启用 HTML 标签
-  breaks: true, // 转换换行符为 <br>
-  linkify: true, // 自动转换 URL 为链接
-  highlight: function (str, lang) {
-    if (lang && str) {
+// 创建markdown-it实例
+const md = new MarkdownIt({
+  html: true,
+  linkify: true,
+  typographer: true,
+  highlight: (str, lang) => {
+    if (lang && hljs.getLanguage(lang)) {
       try {
-        const highlighted = highlightCode(str, lang)
-        return generateCodeBlockHtml(highlighted, lang)
+        return hljs.highlight(str, { language: lang }).value
       } catch (__) { }
     }
-    return generateInlineCodeHtml(md.utils.escapeHtml(str))
-  },
+    return '' // 使用默认的转义
+  }
 })
 
-// 配置链接在新标签页打开
-md.use(mdLinkAttributes, {
-  attrs: {
-    target: '_blank',
-    rel: 'noopener',
-  },
-})
-
-// 启用 emoji 支持
-md.use(emoji)
-
-// 导出渲染函数
-export const renderMarkdown = (content: string): string => {
-  if (!content) return ''
-  return md.render(content)
-}
-
-// 带光标效果的Markdown渲染
-export const renderMarkdownWithCursor = (content: string): string => {
+// 渲染带光标的Markdown
+export function renderWithCursor(content: string, isStreaming = false, isComplete = false) {
   if (!content) return ''
 
-  // 处理Markdown内容，在适当位置插入光标
-  const processed = processMarkdownWithCursor(content, true)
+  // 如果不是流式响应或已完成，直接渲染
+  if (!isStreaming || isComplete) {
+    return md.render(content)
+  }
 
-  // 渲染处理后的内容
+  // 处理Markdown内容并渲染
+  const processed = processMarkdown(content, isStreaming, isComplete)
   const rendered = md.render(processed)
 
-  // 替换特殊光标标记
-  return replaceCursorMarker(rendered)
+  // 替换特殊标记为光标
+  return replaceCursorMarkers(rendered)
 }
 
-// 导出 markdown-it 实例，以便需要时进行更多配置
 export { md }

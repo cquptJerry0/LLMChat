@@ -1,17 +1,20 @@
 <script setup lang="ts">
-import { onMounted, ref, onUnmounted } from 'vue'
+import { onMounted, ref, onUnmounted, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { useTheme } from '@/composables/useTheme'
 import { useConversationControl } from '@/composables/useConversationControl'
 import { useNormalizedChatStore } from '@/stores/normalizedChat'
 import { Monitor, Close } from '@element-plus/icons-vue'
 import ChatLayout from './layout/ChatLayout.vue'
 import StreamMonitor from '@/components/StreamMonitor.vue'
+import MainWindow from './layout/MainWindow.vue'
+
+// 路由相关
+const route = useRoute()
+const router = useRouter()
 
 // 初始化核心存储
 const chatStore = useNormalizedChatStore()
-
-// 初始化主题
-const { currentTheme, setTheme } = useTheme()
 
 // 初始化会话控制
 const {
@@ -19,6 +22,52 @@ const {
   conversationActions,
   messageActions
 } = useConversationControl()
+
+// 接收路由参数
+const props = defineProps<{
+  conversationId?: string
+}>()
+
+// 监听路由参数变化
+watch(
+  () => props.conversationId,
+  (newId, oldId) => {
+    console.log(`Route param changed: ${oldId} -> ${newId}`)
+    if (newId && newId !== conversationState.value.currentConversationId) {
+      // 如果对话存在，切换到指定对话
+      if (chatStore.conversations.has(newId)) {
+        console.log(`Switching to existing conversation: ${newId}`)
+        conversationActions.switch(newId)
+      } else {
+        // 如果对话不存在，创建新对话
+        console.log(`Creating new conversation as ${newId} does not exist`)
+        const newConversationId = conversationActions.create('新的对话')
+        // 更新路由到新创建的对话
+        router.replace({
+          name: 'conversation',
+          params: { conversationId: newConversationId }
+        })
+      }
+    }
+  },
+  { immediate: true }
+)
+
+// 监听当前对话ID变化
+watch(
+  () => conversationState.value.currentConversationId,
+  (newId, oldId) => {
+    console.log(`Current conversation changed: ${oldId} -> ${newId}`)
+    if (newId && route.params.conversationId !== newId) {
+      // 更新路由
+      console.log(`Updating route to match current conversation: ${newId}`)
+      router.replace({
+        name: 'conversation',
+        params: { conversationId: newId }
+      })
+    }
+  }
+)
 
 // 控制 StreamMonitor 的显示状态
 const showStreamMonitor = ref(false)
@@ -44,7 +93,12 @@ const handleVisibilityChange = () => {
 onMounted(() => {
   // 创建默认会话（如果没有活动会话）
   if (!conversationState.value.currentConversationId) {
-    conversationActions.create('新的对话')
+    const newConversationId = conversationActions.create('新的对话')
+    // 更新路由到新创建的对话
+    router.replace({
+      name: 'conversation',
+      params: { conversationId: newConversationId }
+    })
   }
 
   // 监听网络状态变化
@@ -91,7 +145,12 @@ const clearAllData = () => {
     // 重新初始化
     chatStore.initializeFromStorage()
     // 创建新会话
-    conversationActions.create('新的对话')
+    const newConversationId = conversationActions.create('新的对话')
+    // 更新路由到新创建的对话
+    router.replace({
+      name: 'conversation',
+      params: { conversationId: newConversationId }
+    })
   }
 }
 
@@ -105,7 +164,15 @@ defineExpose({
 
 <template>
   <div class="main-page">
-    <ChatLayout />
+    <ChatLayout>
+      <template #main-window="{ toggleSidebar }">
+        <MainWindow
+          :key="props.conversationId"
+          :conversation-id="props.conversationId"
+          @toggle-sidebar="toggleSidebar"
+        />
+      </template>
+    </ChatLayout>
 
     <!-- 网络状态提示 -->
     <div v-if="!isOnline" class="network-status">
@@ -201,6 +268,4 @@ defineExpose({
     font-size: 20px;
   }
 }
-
-
 </style>

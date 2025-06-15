@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, inject, onMounted, onUnmounted } from 'vue'
-import { renderMarkdown } from '@/utils/markdown'
+import { renderWithCursor } from '@/utils/markdown'
 import { Document, ArrowDown } from '@element-plus/icons-vue'
 import { icons } from '@/constants/icons'
 import type { Message } from '@/types/chat'

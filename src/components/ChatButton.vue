@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, useSlots, useAttrs } from 'vue'
+import { computed, useSlots, useAttrs, watchEffect } from 'vue'
 import ChatIcon from './ChatIcon.vue'
 const slots = useSlots()
 const attrs = useAttrs()
@@ -19,6 +19,10 @@ const props = defineProps({
     }
   },
   icon: {
+    type: String,
+    default: ''
+  },
+  iconColor: {
     type: String,
     default: ''
   },
@@ -65,27 +69,42 @@ const iconSize = computed(() => {
   }
 })
 
+// 提取带前缀的属性
 const tooltipAttrs = computed(() => {
-  const tooltipProps = ['content', 'placement', 'effect', 'raw-content', 'disabled', 'offset', 'visible', 'hide-after', 'show-after', 'auto-close', 'manual', 'popper-options', 'enterable', 'show-arrow', 'append-to', 'popper-class', 'teleported', 'transition', 'trigger', 'virtual-triggering', 'virtual-ref', 'persistent']
   const result: Record<string, any> = {}
 
   for (const key in attrs) {
-    if (tooltipProps.includes(key)) {
-      result[key] = attrs[key]
+    // 提取et:开头的属性(Element Tooltip)
+    if (key.startsWith('et:')) {
+      // 去掉前缀，获取实际属性名
+      const actualKey = key.slice(3) // 移除'et:'
+      result[actualKey] = attrs[key]
     }
   }
+
+  // 如果设置了props中的tooltip，添加为content
+  if (props.tooltip) {
+    result.content = props.tooltip
+  }
+
   return result
 })
 
 const buttonAttrs = computed(() => {
-  const tooltipProps = ['content', 'placement', 'effect', 'raw-content', 'disabled', 'offset', 'visible', 'hide-after', 'show-after', 'auto-close', 'manual', 'popper-options', 'enterable', 'show-arrow', 'append-to', 'popper-class', 'teleported', 'transition', 'trigger', 'virtual-triggering', 'virtual-ref', 'persistent']
   const result: Record<string, any> = {}
 
   for (const key in attrs) {
-    if (!tooltipProps.includes(key)) {
+    // 提取eb:开头的属性(Element Button)
+    if (key.startsWith('eb:')) {
+      // 去掉前缀，获取实际属性名
+      const actualKey = key.slice(3) // 移除'eb:'
+      result[actualKey] = attrs[key]
+    } else if (!key.startsWith('et:')) {
+      // 没有前缀的属性默认传给button
       result[key] = attrs[key]
     }
   }
+
   return result
 })
 
@@ -112,6 +131,7 @@ const buttonAttrs = computed(() => {
         v-if="icon"
         :name="icon"
         :size="iconSize"
+        :color="props.iconColor"
         class="chat-button__icon"
         :class="{ 'chat-button__icon--right': iconPosition === 'right' }"
       />
@@ -130,7 +150,7 @@ const buttonAttrs = computed(() => {
         'chat-button--icon-only': iconOnly
       }
     ]"
-    v-bind="$attrs"
+    v-bind="buttonAttrs"
     :disabled="disabled"
     :loading="loading"
   >
@@ -138,6 +158,7 @@ const buttonAttrs = computed(() => {
       v-if="icon"
       :name="icon"
       :size="iconSize"
+      :color="props.iconColor"
       class="chat-button__icon"
       :class="{ 'chat-button__icon--right': iconPosition === 'right' }"
     />
@@ -151,17 +172,17 @@ const buttonAttrs = computed(() => {
   font-weight: 500;
   border-radius: 6px;
   transition: all 0.2s ease;
-  color: #606266;
-  background-color: #f2f3f5;
+  color: var(--text-regular);
+  background-color: var(--background-color-base);
   border-color: transparent;
 
   &:hover {
-    background-color: #e6e8eb;
-    color: #303133;
+    background-color: var(--background-color-light);
+    color: var(--text-primary);
   }
 
   &:active {
-    background-color: #dcdfe6;
+    background-color: var(--background-color-base);
   }
 
   // 图标样式
@@ -232,16 +253,16 @@ const buttonAttrs = computed(() => {
 
   // 类型变体样式
   &--primary {
-    background-color: #409eff;
-    color: #ffffff;
+    background-color: var(--text-primary);
+    color: var(--background-color-light);
 
     &:hover {
-      background-color: #66b1ff;
-      color: #ffffff;
+      background-color: var(--text-regular);
+      color: var(--background-color-light);
     }
 
     &:active {
-      background-color: #3a8ee6;
+      background-color: var(--text-primary);
     }
   }
 

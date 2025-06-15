@@ -1,101 +1,91 @@
-// 光标HTML定义
-export const CURSOR_TYPES = {
+export interface Position {
+  line: number
+  column: number
+}
+
+// 光标HTML标记
+const CURSOR_MARKERS = {
   TEXT: '<span class="typewriter-cursor"></span>',
-  CODE: '<span class="code-cursor"></span>',
-  CODE_MARKER: '/* CURSOR_POSITION */'
-} as const;
-
-/**
- * 检测字符串中的Markdown代码块
- * @param text Markdown文本内容
- * @returns 包含代码块信息的数组
- */
-export function detectCodeBlocks(text: string): Array<{ content: string; isCode: boolean; start: number; end: number }> {
-  const segments: Array<{ content: string; isCode: boolean; start: number; end: number }> = [];
-  const codeBlockRegex = /```[\s\S]*?```/g;
-  let lastIndex = 0;
-  let match;
-
-  while ((match = codeBlockRegex.exec(text)) !== null) {
-    // 添加代码块前的普通文本
-    if (match.index > lastIndex) {
-      segments.push({
-        content: text.slice(lastIndex, match.index),
-        isCode: false,
-        start: lastIndex,
-        end: match.index - 1
-      });
-    }
-
-    // 添加代码块
-    segments.push({
-      content: match[0],
-      isCode: true,
-      start: match.index,
-      end: match.index + match[0].length - 1
-    });
-
-    lastIndex = match.index + match[0].length;
-  }
-
-  // 添加最后一段普通文本
-  if (lastIndex < text.length) {
-    segments.push({
-      content: text.slice(lastIndex),
-      isCode: false,
-      start: lastIndex,
-      end: text.length - 1
-    });
-  }
-
-  return segments;
+  CODE: '/* CURSOR_POSITION */'
 }
 
 /**
- * 在Markdown内容中处理光标位置
- * @param text Markdown文本内容
- * @param shouldShowCursor 是否显示光标
+ * 处理Markdown内容，在适当位置插入光标
  */
-export function processMarkdownWithCursor(text: string, shouldShowCursor: boolean): string {
-  if (!text || !shouldShowCursor) return text;
+export function processMarkdown(text: string, isStreaming: boolean, isComplete: boolean): string {
+  if (!text) return ''
 
-  // 获取文本中的代码块信息
-  const segments = detectCodeBlocks(text);
+  // 分割文本为行
+  const lines = text.split('\n')
+  let inCodeBlock = false
+  let languageSpecified = false
 
-  // 找到最后一个段落
-  const lastSegment = segments[segments.length - 1];
-
-  // 如果没有段落，直接返回原文本
-  if (!lastSegment) return text;
-
-  // 根据最后一个段落类型添加光标
-  if (lastSegment.isCode) {
-    // 检查是否有语言标记 (```language)
-    const firstLineEnd = lastSegment.content.indexOf('\n');
-    const firstLine = firstLineEnd > 0 ? lastSegment.content.substring(0, firstLineEnd) : '';
-    const hasLanguage = firstLine.length > 3 && !!firstLine.slice(3).trim();
-
-    if (hasLanguage) {
-      // 在代码块内容中添加光标标记
-      const lastContentChar = lastSegment.content.lastIndexOf('```');
-      return text.substring(0, lastContentChar) + ' ' + CURSOR_TYPES.CODE_MARKER + text.substring(lastContentChar);
-    } else {
-      // 在代码块末尾添加光标
-      return text + CURSOR_TYPES.CODE;
+  // 处理每一行
+  const processedLines = lines.map((line, index) => {
+    // 检查是否是代码块开始或结束
+    if (line.startsWith('```')) {
+      if (!inCodeBlock) {
+        // 代码块开始，检查是否指定了语言
+        inCodeBlock = true
+        languageSpecified = line.length > 3 && !!line.slice(3).trim()
+        return line
+      } else {
+        // 代码块结束
+        inCodeBlock = false
+        return line
+      }
     }
-  } else {
-    // 在普通文本末尾添加光标
-    return text + CURSOR_TYPES.TEXT;
-  }
+
+    // 如果是最后一行且需要显示光标
+    if (index === lines.length - 1 && isStreaming && !isComplete) {
+      if (inCodeBlock) {
+        // 在代码块内
+        if (languageSpecified) {
+          // 语言指定的代码块中添加特殊注释标记，以便后续替换
+          return line + ' /* CURSOR_POSITION */'
+        } else {
+          // 没有语言的代码块，直接添加光标HTML
+          return line + CURSOR_MARKERS.TEXT
+        }
+      } else {
+        // 不在代码块内，添加HTML光标
+        return line + CURSOR_MARKERS.TEXT
+      }
+    }
+
+    return line
+  })
+
+  return processedLines.join('\n')
 }
 
 /**
- * 在渲染后的HTML中替换光标标记
- * @param html 渲染后的HTML内容
+ * 替换渲染后HTML中的光标标记
  */
-export function replaceCursorMarker(html: string): string {
+export function replaceCursorMarkers(html: string): string {
   return html.replace(
-    new RegExp(CURSOR_TYPES.CODE_MARKER, 'g'),
-    CURSOR_TYPES.CODE
-  );
+    /\/\* CURSOR_POSITION \*\//g,
+    '<span class="code-cursor"></span>'
+  )
+}
+
+/**
+ * 获取光标位置
+ */
+export function getCursorPosition(text: string): Position {
+  const lines = text.split('\n')
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i]
+    const textCursorIndex = line.indexOf(CURSOR_MARKERS.TEXT)
+    const codeCursorIndex = line.indexOf(CURSOR_MARKERS.CODE)
+
+    if (textCursorIndex !== -1) {
+      return { line: i, column: textCursorIndex }
+    }
+    if (codeCursorIndex !== -1) {
+      return { line: i, column: codeCursorIndex }
+    }
+  }
+
+  return { line: 0, column: 0 }
 }

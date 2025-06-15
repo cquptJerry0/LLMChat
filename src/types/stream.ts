@@ -47,6 +47,11 @@ export interface StreamState {
   accumulatedReasoning: string;  // 累积的推理内容
   lastCompletionTokens: number;  // 上次的完成令牌数
   pausedAt: number;             // 暂停时的位置
+
+  // 暂停相关字段
+  isPaused: boolean;           // 是否处于暂停状态
+  contentBuffer: string;       // 暂停时的内容缓冲区
+  reasoningBuffer: string;     // 暂停时的推理内容缓冲区
 }
 
 // 恢复结果接口

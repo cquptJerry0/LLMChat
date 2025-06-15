@@ -1,11 +1,6 @@
 <script setup lang="ts">
-import { ref } from 'vue'
-import { useConversationControlChild } from '@/composables/useConversationControl'
+import { ref, onMounted } from 'vue'
 import Sidebar from './Sidebar.vue'
-import MainWindow from './MainWindow.vue'
-
-// 使用父组件提供的会话控制
-const { state } = useConversationControlChild()
 
 // 侧边栏折叠状态
 const isSidebarCollapsed = ref(false)
@@ -14,6 +9,7 @@ const isSidebarCollapsed = ref(false)
 const toggleSidebar = () => {
   isSidebarCollapsed.value = !isSidebarCollapsed.value
 }
+
 </script>
 
 <template>
@@ -24,9 +20,9 @@ const toggleSidebar = () => {
       class="chat-layout__sidebar"
     />
 
-    <!-- 主窗口 -->
+    <!-- 主窗口 - 使用具名插槽 -->
     <el-container class="chat-layout__main">
-      <MainWindow @toggle-sidebar="toggleSidebar" />
+      <slot name="main-window" :toggle-sidebar="toggleSidebar" />
     </el-container>
   </el-container>
 </template>

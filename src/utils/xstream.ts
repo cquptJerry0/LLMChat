@@ -64,6 +64,16 @@ export interface XStreamOptions<Output = SSEOutput> {
    * @default console.error
    */
   errorHandler?: (error: Error) => void
+
+  /**
+   * 流取消时的回调函数
+   */
+  onCancel?: () => void
+
+  /**
+   * 流发生错误时的回调函数
+   */
+  onError?: (error: Error) => void
 }
 
 /**
@@ -88,6 +98,18 @@ export interface XReadableStream<T = SSEOutput>
    * @returns Promise<void>
    */
   cancel(): Promise<void>
+
+  /**
+   * 中止流的处理方法
+   * @returns Promise<void>
+   */
+  abort(): Promise<void>
+
+  /**
+   * 暂停流的处理方法
+   * @returns Promise<void>
+   */
+  pause(): Promise<void>
 }
 
 /**
@@ -199,10 +221,10 @@ function createPartParser(
  * 4. → createPartParser → [结构化对象(SSEOutput)]
  *
  * @param options 流处理选项
- * @param signal 可选的中断信号，用于取消流处理
+ * @param signal 可选的中止信号，用于取消流处理
  * @returns 处理后的可读流，支持异步迭代
  */
-export function XStream<Output = SSEOutput>(
+export function createXStream<Output = SSEOutput>(
   options: XStreamOptions<Output>,
   signal?: AbortSignal
 ): XReadableStream<Output> {
@@ -214,6 +236,8 @@ export function XStream<Output = SSEOutput>(
     partSeparator = '\n',
     kvSeparator = ':',
     errorHandler = console.error,
+    onCancel,
+    onError
   } = options
 
   // 参数验证
@@ -246,77 +270,95 @@ export function XStream<Output = SSEOutput>(
 
   // 扩展ReadableStream，添加异步迭代器支持
   const xstream = processedStream as XReadableStream<Output>
-  let streamReader: ReadableStreamDefaultReader<Output> | null =
-    null
+  let streamReader: ReadableStreamDefaultReader<Output> | null = null
+  let isCancelled = false
+  let isAborted = false
 
-  // 实现异步迭代器 - 使流支持for await...of语法
+  // 添加异步迭代器支持
   xstream[Symbol.asyncIterator] = async function* () {
     try {
-      // 获取流读取器
-      streamReader = this.getReader()
+      streamReader = processedStream.getReader()
       xstream.reader = streamReader
 
-      while (true) {
-        // 检查中断信号 - 支持外部取消操作
-        if (signal?.aborted) {
-          break
+      while (!isCancelled && !isAborted) {
+        const { value, done } = await streamReader.read()
+
+        if (isCancelled || isAborted) {
+          console.log('Stream iteration interrupted');
+          break;
         }
 
-        // 读取下一个数据块
-        const { done, value } = await streamReader.read()
+        if (done) {
+          console.log('Stream read complete');
+          break;
+        }
 
-        // 流结束时退出循环
-        if (done) break
-
-        // 产出非空值
-        if (value) yield value
+        yield value
       }
     } catch (error) {
-      // 错误处理和传递
+      console.error('Stream processing error:', error);
       if (error instanceof Error) {
-        errorHandler(error)
+        errorHandler(error);
+        onError?.(error);
       }
-      throw error // 重新抛出错误，允许调用者捕获
     } finally {
-      // 无论如何都释放锁，防止资源泄漏
-      streamReader?.releaseLock()
+      if (streamReader) {
+        try {
+          await streamReader.cancel()
+          streamReader.releaseLock()
+        } catch (error) {
+          console.error('Error during stream cleanup:', error)
+        }
+        streamReader = null
+        xstream.reader = undefined
+      }
+      console.log('Stream iterator ended, cleaning up resources');
     }
   }
 
-  // 添加取消方法 - 允许手动取消流处理
-  // 添加取消方法 - 允许手动取消流处理
-  xstream.cancel = async function () {
+  // 添加取消方法
+  xstream.cancel = async () => {
+    isCancelled = true
     if (streamReader) {
       try {
-        // 通知流取消并释放资源
-        await streamReader.cancel('Stream explicitly cancelled');
+        await streamReader.cancel()
+        streamReader.releaseLock()
       } catch (error) {
-        // 忽略已释放读取器的错误
-        if (error instanceof TypeError &&
-          error.message.includes('reader has been released')) {
-          // 读取器已经被释放，忽略错误
-        } else {
-          // 其他错误则传递给错误处理器
-          errorHandler(error instanceof Error ? error : new Error(String(error)));
-        }
-      } finally {
-        try {
-          streamReader.releaseLock();
-        } catch (e) {
-          // 忽略释放锁时的错误
-        }
+        console.error('Error during stream cancellation:', error)
       }
+      streamReader = null
+      xstream.reader = undefined
     }
-  };
+    onCancel?.();
+  }
 
-  // 处理中断信号 - 支持AbortController中断
+  // 添加中止方法
+  xstream.abort = async () => {
+    isAborted = true
+    if (signal) {
+      const controller = new AbortController()
+      controller.abort()
+      signal = controller.signal
+    }
+    await xstream.cancel()
+  }
+
+  // 添加暂停方法
+  xstream.pause = async () => {
+    isCancelled = true
+    await xstream.cancel()
+  }
+
+  // 监听中止信号
   if (signal) {
     signal.addEventListener('abort', () => {
-      // 当收到中断信号时取消流
+      isAborted = true
       xstream.cancel().catch(errorHandler)
     })
   }
 
-  // 返回增强后的流
   return xstream
 }
+
+// Export the default function as XStream for backward compatibility
+export const XStream = createXStream;

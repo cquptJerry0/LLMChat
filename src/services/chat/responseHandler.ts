@@ -89,17 +89,21 @@ class ResponseHandler implements IResponseHandler {
     updateCallback: UpdateCallback,
     options?: StreamHandlerOptions
   ): Promise<void> {
+    console.log('[ResponseHandler层] 开始处理流式响应', options?.messageId)
+
     if (!response || !response.body) {
+      console.error('[ResponseHandler层] 无效的流式响应: 响应体为空')
       throw new ResponseParseError('无效的流式响应: 响应体为空');
     }
 
     if (!response.ok) {
+      console.error(`[ResponseHandler层] 无效的流式响应: HTTP ${response.status} ${response.statusText}`)
       throw new ResponseParseError(`无效的流式响应: HTTP ${response.status} ${response.statusText}`);
     }
 
     const contentType = response.headers.get('content-type');
     if (!contentType?.includes('text/event-stream')) {
-      console.warn('警告: 响应内容类型不是 text/event-stream:', contentType);
+      console.warn('[ResponseHandler层] 警告: 响应内容类型不是 text/event-stream:', contentType);
     }
 
     const streamStore = this.getStreamStore();
@@ -108,12 +112,21 @@ class ResponseHandler implements IResponseHandler {
     const resumeInfo = options?.resumeInfo;
 
     if (!messageId) {
+      console.error('[ResponseHandler层] 缺少消息ID')
       throw new ResponseParseError('缺少消息ID');
     }
+
+    console.log('[ResponseHandler层] 流处理参数:', {
+      messageId,
+      hasSignal: !!signal,
+      hasResumeInfo: !!resumeInfo,
+      signalAborted: signal?.aborted
+    })
 
     try {
       // 克隆响应以便我们可以使用XStream处理
       const clonedResponse = response.clone();
+      console.log('[ResponseHandler层] 响应已克隆')
 
       // 初始化状态，如果有恢复信息则使用恢复信息
       let accumulatedContent = resumeInfo?.lastContent || '';
@@ -122,8 +135,16 @@ class ResponseHandler implements IResponseHandler {
       let accumulatedToolCalls: ToolCall[] = [];
       const startTime = resumeInfo?.pausedAt || Date.now();
 
+      console.log('[ResponseHandler层] 初始化状态:', {
+        contentLength: accumulatedContent.length,
+        reasoningLength: accumulatedReasoning.length,
+        tokens: lastCompletionTokens,
+        startTime
+      })
+
       // 如果有恢复信息，立即更新UI显示之前的内容
       if (resumeInfo) {
+        console.log('[ResponseHandler层] 使用恢复信息更新UI')
         updateCallback(
           accumulatedContent,
           accumulatedReasoning,
@@ -134,27 +155,57 @@ class ResponseHandler implements IResponseHandler {
       }
 
       // 使用XStream处理流式响应
+      console.log('[ResponseHandler层] 创建XStream')
       const stream = XStream({
         readableStream: clonedResponse.body!
       } as XStreamOptions, signal);
 
       // 异步迭代处理流
       try {
+        console.log('[ResponseHandler层] 开始迭代处理流')
+        let eventCount = 0;
+
         for await (const event of stream) {
+          eventCount++;
+
+          // 每10个事件记录一次状态
+          if (eventCount % 10 === 0) {
+            console.log(`[ResponseHandler层] 已处理 ${eventCount} 个事件, 消息ID: ${messageId}`)
+          }
+
           // 检查是否有data字段
-          if (!event.data) continue;
+          if (!event.data) {
+            console.log('[ResponseHandler层] 跳过无data字段的事件')
+            continue;
+          }
 
           try {
             // 检查是否是结束标记
             if (event.data === '[DONE]') {
-              console.log('收到流结束标记');
+              console.log('[ResponseHandler层] 收到流结束标记')
               continue;
+            }
+
+            // 检查中断信号
+            if (signal?.aborted) {
+              console.log('[ResponseHandler层] 检测到中断信号，停止处理流', { messageId });
+              break;
+            }
+
+            // 检查流状态
+            const streamState = streamStore.getStreamState(messageId);
+            if (!streamState || streamState.status === 'completed' || streamState.status === 'error') {
+              console.log('[ResponseHandler层] 流状态异常，停止处理', {
+                messageId,
+                status: streamState?.status
+              });
+              break;
             }
 
             // 解析JSON数据
             const data = JSON.parse(event.data);
             if (!data.choices?.[0]?.delta) {
-              console.warn('警告: SSE 消息缺少必要的字段:', data);
+              console.warn('[ResponseHandler层] 警告: SSE 消息缺少必要的字段:', data);
               continue;
             }
 
@@ -176,6 +227,11 @@ class ResponseHandler implements IResponseHandler {
             lastCompletionTokens = completion_tokens;
             const speed = calculateSpeed(completion_tokens, startTime);
 
+            // 每50个事件记录一次内容长度
+            if (eventCount % 50 === 0) {
+              console.log(`[ResponseHandler层] 当前内容长度: ${accumulatedContent.length}, 推理长度: ${accumulatedReasoning.length}, 令牌数: ${completion_tokens}`)
+            }
+
             // 更新状态
             this.updateState(
               messageId,
@@ -187,24 +243,36 @@ class ResponseHandler implements IResponseHandler {
               updateCallback
             );
           } catch (error) {
-            console.error('解析 SSE 数据错误:', error, '原始数据:', event.data);
+            console.error('[ResponseHandler层] 解析 SSE 数据错误:', error, '原始数据:', event.data);
             // 继续处理下一个事件
           }
         }
+
+        console.log(`[ResponseHandler层] 流处理完成，共处理 ${eventCount} 个事件, 消息ID: ${messageId}`)
       } catch (error) {
         // 检查是否是因为中断信号导致的错误
         if (signal?.aborted) {
-          console.log('流处理被中断', { messageId });
+          console.log('[ResponseHandler层] 流处理被中断', { messageId });
+          // 不抛出错误，让流正常结束
+          return;
         } else {
+          console.error('[ResponseHandler层] 流处理过程中发生错误:', error)
           throw error;
         }
       }
     } catch (error) {
-      console.error('处理流式响应错误:', error);
+      console.error('[ResponseHandler层] 处理流式响应错误:', error);
       throw new ResponseParseError('处理流式响应失败', error);
     } finally {
-      // 标记流完成
-      streamStore.completeStream(messageId);
+      // 检查流的最终状态
+      const finalState = streamStore.getStreamState(messageId);
+      console.log(`[ResponseHandler层] 流处理结束，最终状态: ${finalState?.status}`, { messageId })
+
+      if (finalState?.status !== 'completed' && finalState?.status !== 'error') {
+        // 只有在非完成和非错误状态时才标记完成
+        console.log(`[ResponseHandler层] 标记流完成: ${messageId}`)
+        streamStore.completeStream(messageId);
+      }
     }
   }
 

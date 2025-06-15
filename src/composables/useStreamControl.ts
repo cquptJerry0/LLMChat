@@ -1,4 +1,4 @@
-import { computed, onMounted, inject, provide, onUnmounted } from 'vue'
+import { computed, onMounted, inject, provide, onUnmounted, getCurrentInstance, ref, watch } from 'vue'
 import { useStreamStore } from '@/stores/stream'
 import { useNormalizedChatStore } from '@/stores/normalizedChat'
 import { chatService } from '@/services/chat/chatService'
@@ -15,13 +15,14 @@ const STREAM_CONTROL_KEY = Symbol('streamControl')
  *
  * 提供对流式聊天生成过程的完整控制，包括暂停、恢复和取消功能。
  * 自动处理状态持久化，支持页面刷新后恢复。
+ * 天然跟踪最新的消息ID。
  *
- * @param messageId - 要控制的消息ID
+ * @param initialMessageId - 初始消息ID，可选
  * @param options - 配置选项
  * @returns 流控制器接口
  */
 export function useStreamControl(
-  messageId: string,
+  initialMessageId?: string,
   options: StreamControlOptions = {}
 ): StreamControlReturn {
   // 解构配置选项，设置默认值
@@ -34,11 +35,22 @@ export function useStreamControl(
   const _chatStore = chatStore()
   const _streamStore = streamStore()
 
+  // 当前控制的消息ID
+  const currentMessageId = ref(initialMessageId || 'default')
+
+  // 更新当前消息ID
+  const updateMessageId = (messageId: string) => {
+    if (messageId && messageId !== currentMessageId.value) {
+      currentMessageId.value = messageId
+    }
+  }
+
   /**
    * 统一状态管理：从store中派生状态
    * 每当store中的数据更新时，这个计算属性也会更新
    */
   const state = computed(() => {
+    const messageId = currentMessageId.value
     const message = _chatStore.messages.get(messageId)
     const streamState = _streamStore.getStreamState(messageId)
     const isPaused = streamState?.status === 'paused'
@@ -49,6 +61,7 @@ export function useStreamControl(
     const errorMessage = streamState?.error
     const timestamp = Date.now()
     return {
+      messageId,
       content: message?.content || '',
       reasoning_content: message?.reasoning_content || '',
       completion_tokens: message?.completion_tokens || 0,
@@ -70,6 +83,7 @@ export function useStreamControl(
    * @returns 中断控制器，如果流不在生成中则返回null
    */
   const pause = (): AbortController | null => {
+    const messageId = currentMessageId.value
     if (state.value.isStreaming) {
       const controller = _streamStore.pauseStream(messageId)
       return controller instanceof AbortController ? controller : null
@@ -81,18 +95,36 @@ export function useStreamControl(
    * 恢复生成流
    * @param updateCallback - 用于更新UI的回调函数
    */
-  const resume = async (updateCallback: UpdateCallback): Promise<void> => {
+  const resume = async (updateCallback?: UpdateCallback): Promise<void> => {
+    const messageId = currentMessageId.value
     if (state.value.isPaused) {
       try {
         const message = _chatStore.messages.get(messageId)
         if (!message?.parentId) return
+
+        // 创建默认回调函数
+        const defaultCallback: UpdateCallback = (
+          content,
+          reasoning_content,
+          completion_tokens,
+          speed,
+          tool_calls
+        ) => {
+          _chatStore.updateMessage(messageId, {
+            content,
+            reasoning_content,
+            completion_tokens: Number(completion_tokens),
+            speed: Number(speed),
+            tool_calls
+          })
+        }
 
         // 使用统一的消息历史构建方法
         const messageHistory = _chatStore.getMessageHistory(message.parentId)
         await chatService.resumeChatCompletion(
           messageHistory,
           messageId,
-          updateCallback
+          updateCallback || defaultCallback
         )
       } catch (error) {
         _streamStore.setStreamError(
@@ -108,6 +140,7 @@ export function useStreamControl(
    * @returns 是否成功取消
    */
   const cancel = (): boolean => {
+    const messageId = currentMessageId.value
     try {
       const result = chatService.cancelRequest(messageId)
 
@@ -128,43 +161,13 @@ export function useStreamControl(
   const setupAutoRecover = () => {
     const handleOnline = () => {
       if (state.value.isPaused) {
-        const updateCallback: UpdateCallback = (
-          content,
-          reasoning_content,
-          completion_tokens,
-          speed,
-          tool_calls
-        ) => {
-          _chatStore.updateMessage(messageId, {
-            content,
-            reasoning_content,
-            completion_tokens: Number(completion_tokens),
-            speed: Number(speed),
-            tool_calls
-          })
-        }
-        resume(updateCallback)
+        resume()
       }
     }
 
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible' && state.value.isPaused) {
-        const updateCallback: UpdateCallback = (
-          content,
-          reasoning_content,
-          completion_tokens,
-          speed,
-          tool_calls
-        ) => {
-          _chatStore.updateMessage(messageId, {
-            content,
-            reasoning_content,
-            completion_tokens: Number(completion_tokens),
-            speed: Number(speed),
-            tool_calls
-          })
-        }
-        resume(updateCallback)
+        resume()
       }
     }
 
@@ -184,24 +187,10 @@ export function useStreamControl(
 
   onMounted(() => {
     // 检查是否需要恢复流
+    const messageId = currentMessageId.value
     const streamState = _streamStore.getStreamState(messageId)
     if (streamState && (streamState.status === 'streaming' || streamState.status === 'paused')) {
-      const updateCallback: UpdateCallback = (
-        content,
-        reasoning_content,
-        completion_tokens,
-        speed,
-        tool_calls
-      ) => {
-        _chatStore.updateMessage(messageId, {
-          content,
-          reasoning_content,
-          completion_tokens: Number(completion_tokens),
-          speed: Number(speed),
-          tool_calls
-        })
-      }
-      resume(updateCallback)
+      resume()
     }
 
     // 设置自动恢复
@@ -215,19 +204,29 @@ export function useStreamControl(
     }
   })
 
+  // 创建控制器接口
+  const controller: StreamControlReturn = {
+    state,
+    pause,
+    resume,
+    cancel,
+    updateMessageId
+  }
+
   // 提供给子组件
   provide(STREAM_CONTROL_KEY, {
     state,
-    controls: { pause, resume, cancel }
+    controls: { pause, resume, cancel, updateMessageId }
   })
 
   // 返回公开的API
-  return {
-    // 状态
-    state,
-    /// 控制方法
-    pause,
-    resume,
-    cancel
+  return controller
+}
+
+export function useStreamControlChild(): StreamControlContext {
+  const streamControl = inject(STREAM_CONTROL_KEY)
+  if (!streamControl) {
+    throw new Error('Stream control not found')
   }
+  return streamControl as StreamControlContext
 }

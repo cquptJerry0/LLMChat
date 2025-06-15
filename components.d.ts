@@ -11,6 +11,7 @@ declare module 'vue' {
     Bubble: typeof import('./src/components/Bubble.vue')['default']
     BubbleList: typeof import('./src/components/BubbleList.vue')['default']
     ChatButton: typeof import('./src/components/ChatButton.vue')['default']
+    ChatDemo: typeof import('./src/components/ChatDemo.vue')['default']
     ChatIcon: typeof import('./src/components/ChatIcon.vue')['default']
     ChatInput: typeof import('./src/components/ChatInput.vue')['default']
     ChatInputAdapter: typeof import('./src/components/ChatInputAdapter.vue')['default']

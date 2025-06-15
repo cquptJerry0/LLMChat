@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useTheme, type Theme } from '@/composables/useTheme'
+import ChatButton from './ChatButton.vue'
+import ChatIcon from './ChatIcon.vue'
 
 const { currentTheme, setTheme } = useTheme()
 
@@ -10,13 +12,13 @@ const themeLabels: Record<Theme, string> = {
   'eye-care': '护眼模式'
 }
 
-const themeIcons: Record<Theme, string> = {
-  light: 'i-mdi-weather-sunny',
-  dark: 'i-mdi-weather-night',
-  'eye-care': 'i-mdi-eye-outline'
-}
+const currentIcon = computed(() => themeIcons[currentTheme.value])
 
-const isDark = computed(() => currentTheme.value === 'dark')
+const themeIcons: Record<Theme, string> = {
+  light: 'light',
+  dark: 'dark',
+  'eye-care': 'eye-care'
+}
 
 const handleThemeChange = (theme: Theme) => {
   setTheme(theme)
@@ -25,9 +27,14 @@ const handleThemeChange = (theme: Theme) => {
 
 <template>
   <el-dropdown @command="handleThemeChange">
-    <el-button type="primary" :icon="isDark ? 'i-mdi-weather-night' : 'i-mdi-weather-sunny'">
+    <ChatButton
+      type="primary"
+      :icon="currentIcon"
+      eb:round="true"
+      et:placement="bottom"
+    >
       {{ themeLabels[currentTheme] }}
-    </el-button>
+    </ChatButton>
     <template #dropdown>
       <el-dropdown-menu>
         <el-dropdown-item
@@ -37,7 +44,7 @@ const handleThemeChange = (theme: Theme) => {
           :class="{ 'is-active': currentTheme === theme }"
         >
           <div class="theme-item">
-            <i :class="themeIcons[theme]"></i>
+            <ChatIcon :name="themeIcons[theme]" />
             <span>{{ label }}</span>
           </div>
         </el-dropdown-item>
@@ -45,21 +52,3 @@ const handleThemeChange = (theme: Theme) => {
     </template>
   </el-dropdown>
 </template>
-
-
-<style lang="scss" scoped>
-.theme-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-
-  i {
-    font-size: 16px;
-  }
-}
-
-:deep(.el-dropdown-menu__item.is-active) {
-  color: var(--primary-color);
-  background-color: var(--background-color-base);
-}
-</style>

@@ -17,6 +17,8 @@ const emit = defineEmits<{
   (e: 'retry'): void
   (e: 'like', isLike: boolean): void
   (e: 'share'): void
+  (e: 'pause'): void
+  (e: 'resume'): void
 }>()
 
 const showCopyTip = ref(false)
@@ -57,6 +59,14 @@ const handleRetry = () => {
 const handleShare = () => {
   emit('share')
 }
+
+const handlePause = () => {
+  emit('pause')
+}
+
+const handleResume = () => {
+  emit('resume')
+}
 </script>
 
 <template>
@@ -87,11 +97,23 @@ const handleShare = () => {
             <el-alert
               title="生成已暂停"
               type="warning"
-              description="AI 助手生成回复已暂停，您可以从流状态监控器中恢复生成。"
+              description="AI 助手生成回复已暂停，点击下方继续生成按钮恢复。"
               show-icon
               :closable="false"
               class="assistant-paused__alert"
             />
+            <!-- 继续生成按钮 -->
+            <div class="assistant-paused__actions">
+              <ChatButton
+                icon="play"
+                type="success"
+                tooltip="继续生成 (Ctrl+R)"
+                iconColor="var(--icon-color-secondary)"
+                @click="handleResume"
+              >
+                继续生成
+              </ChatButton>
+            </div>
           </div>
 
           <!-- 推理内容 -->
@@ -100,6 +122,7 @@ const handleShare = () => {
             <TypeWriter
               :content="reasoningContent"
               :is-streaming="isStreaming"
+              :is-paused="isPaused"
             />
           </div>
 
@@ -108,11 +131,23 @@ const handleShare = () => {
           <TypeWriter
             :content="content"
             :is-streaming="isStreaming"
+            :is-paused="isPaused"
           />
         </div>
 
     <!-- 操作按钮 -->
     <div class="assistant-actions">
+      <!-- 暂停/继续按钮 -->
+      <ChatButton
+        v-if="isStreaming"
+        icon="pause"
+        size="small"
+        type="warning"
+        tooltip="暂停生成 (Esc)"
+        @click="handlePause"
+      >
+        暂停
+      </ChatButton>
       <ChatButton
         :icon="showCopyTip ? 'check' : 'copy'"
         size="small"
@@ -205,6 +240,12 @@ const handleShare = () => {
   &__alert {
     margin-bottom: 0;
   }
+
+  &__actions {
+    display: flex;
+    margin-top: 8px;
+    justify-content: flex-start;
+  }
 }
 
 .assistant-reasoning {
@@ -232,6 +273,10 @@ const handleShare = () => {
   }
 
   .assistant-wrapper--error & {
+    opacity: 1;
+  }
+
+  .assistant-wrapper--streaming & {
     opacity: 1;
   }
 
