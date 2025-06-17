@@ -3,15 +3,16 @@ import { ref, computed, onMounted, watch } from 'vue'
 import { useConversationControlChild } from '@/composables/useConversationControl'
 import MessageBubble from './components/MessageBubble.vue'
 import { useStreamControl } from '@/composables/useStreamControl_'
+import VirtualScroller from './components/VirtualScroller.vue'
+import NewMessageNotice from './components/NewMessageNotice.vue'
+import { useScrollPosition } from './composables/useScrollPosition'
+import { useMessageNotice } from './composables/useMessageNotice'
 
 // 使用父组件提供的会话控制
 const { state: conversationState } = useConversationControlChild()
 
 // 初始化流控制
 useStreamControl(conversationState.value.lastAssistantMessageId || '')
-
-// 消息列表容器引用
-const messageListRef = ref<HTMLDivElement | null>(null)
 
 // 计算当前会话的消息
 const messages = computed(() => {
@@ -29,22 +30,32 @@ const lastMessageId = computed(() => {
   return messages.value[messages.value.length - 1].id
 })
 
-// 自动滚动到底部
-const scrollToBottom = () => {
-  if (!messageListRef.value) return
+// 使用滚动位置管理
+const {
+  shouldAutoScroll,
+  handleScroll,
+  scrollToBottom,
+  scrollToMessage
+} = useScrollPosition()
 
-  setTimeout(() => {
-    if (messageListRef.value) {
-      messageListRef.value.scrollTop = messageListRef.value.scrollHeight
-    }
-  }, 50)
-}
+// 使用新消息提示管理
+const {
+  newMessageCount,
+  showNewMessageNotice,
+  handleNewMessage,
+  resetNotice
+} = useMessageNotice(shouldAutoScroll)
 
-// 监听消息变化，自动滚动到底部
+// 监听消息变化
 watch(
   messages,
-  () => {
-    scrollToBottom()
+  (newMessages, oldMessages) => {
+    if (newMessages.length > (oldMessages?.length || 0)) {
+      handleNewMessage()
+      if (shouldAutoScroll.value) {
+        scrollToBottom()
+      }
+    }
   },
   { deep: true }
 )
@@ -56,7 +67,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="message-list" ref="messageListRef">
+  <div class="message-list">
     <!-- 欢迎提示 -->
     <div v-if="messages.length === 0" class="message-list__welcome">
       <div class="message-list__welcome-content">
@@ -67,11 +78,22 @@ onMounted(() => {
 
     <!-- 消息列表 -->
     <template v-else>
-      <MessageBubble
-        v-for="message in messages"
-        :key="message.id"
-        :message="message"
-        :is-latest-message="message.id === lastMessageId"
+      <VirtualScroller
+        :messages="messages"
+        :is-generating="isGenerating"
+        :estimate-size="60"
+        @scroll="handleScroll"
+      />
+
+      <!-- 新消息提示 -->
+      <NewMessageNotice
+        v-if="showNewMessageNotice"
+        :count="newMessageCount"
+        position="bottom"
+        @click="() => {
+          scrollToBottom()
+          resetNotice()
+        }"
       />
     </template>
   </div>
@@ -80,8 +102,7 @@ onMounted(() => {
 <style lang="scss" scoped>
 .message-list {
   height: 100%;
-  overflow-y: auto;
-  padding: $spacing-base;
+  position: relative;
 
   &__welcome {
     display: flex;
@@ -108,5 +129,4 @@ onMounted(() => {
     }
   }
 }
-
 </style>
