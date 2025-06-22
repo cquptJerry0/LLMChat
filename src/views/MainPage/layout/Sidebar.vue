@@ -1,36 +1,49 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, inject } from 'vue'
 import { useRouter } from 'vue-router'
 import { useConversationControlChild } from '@/composables/useConversationControl'
 import ConversationsList from '../components/Sidebar/ConversationsList.vue'
 import ChatButton from '@/components/ChatButton.vue'
 import ChatIcon from '@/components/ChatIcon.vue'
-
+import SettingPanel from '../components/MainWindow/ChatHeader/components/SettingPanel.vue'
 // 路由
 const router = useRouter()
-
+const isSidebarCollapsed = inject('isSidebarCollapsed')
 // 使用父组件提供的会话控制
 const { conversationActions } = useConversationControlChild()
 
 // 创建新会话
 const createNewConversation = () => {
-  const newId = conversationActions.create('新的对话')
+  const newId = conversationActions.create()
   router.push({
     name: 'conversation',
     params: { conversationId: newId }
   })
 }
+const settingPanelRef = ref<InstanceType<typeof SettingPanel> | null>(null)
+// 打开设置面板
+const openSettingPanel = () => {
+  settingPanelRef.value?.open()
+}
+
+// 定义事件
+defineEmits(['toggle-sidebar'])
 </script>
 
 <template>
   <el-aside class="sidebar">
     <!-- 最顶部区域：Logo和伸缩按钮 -->
-    <div class="sidebar__top">
+    <div class="sidebar__top" v-if="!isSidebarCollapsed">
       <div class="sidebar__logo">
         <img src="https://t8.baidu.com/it/u=4011543194,454374607&fm=193" alt="logo" class="logo-img" />
       </div>
       <div class="sidebar__collapse-btn">
-        <ChatIcon name="menu-fold" size="20" color="var(--text-secondary)" />
+        <ChatButton
+          type="default"
+          :text="true"
+          icon="menu-fold"
+          @click="$emit('toggle-sidebar')"
+        />
       </div>
     </div>
 
@@ -56,11 +69,14 @@ const createNewConversation = () => {
         type="default"
         :text="true"
         icon="setting"
+        @click="openSettingPanel"
         class="sidebar__settings-btn"
       >
         设置
       </ChatButton>
     </div>
+
+    <SettingPanel ref="settingPanelRef" />
   </el-aside>
 </template>
 
@@ -70,13 +86,14 @@ const createNewConversation = () => {
   flex-direction: column;
   height: 100%;
   background-color: var(--background-color-base);
+  width: 240px; /* 固定宽度 */
+  min-width: 240px; /* 防止内容被压缩 */
 
   &__top {
     display: flex;
     align-items: center;
     justify-content: space-between;
     padding: 20px $spacing-base 1px $spacing-base;
-
   }
 
   &__logo {

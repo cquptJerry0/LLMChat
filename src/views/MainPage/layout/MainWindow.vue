@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted, computed, watch, ref, nextTick } from 'vue'
+import { onMounted, onUnmounted, computed, watch, ref, nextTick, inject } from 'vue'
 import { useRoute } from 'vue-router'
 import { useConversationControlChild } from '@/composables/useConversationControl'
 import { useNormalizedChatStore } from '@/stores/normalizedChat'
@@ -18,8 +18,47 @@ const props = defineProps<{
 // 使用父组件提供的会话控制
 const { state, conversationActions } = useConversationControlChild()
 
+// 获取侧边栏折叠状态
+const isSidebarCollapsed = inject('isSidebarCollapsed', ref(false))
+
 // 初始化流控制，使用当前的lastAssistantMessageId
 const streamControl = useStreamControl(state.value.lastAssistantMessageId || '')
+
+const chatStore = useNormalizedChatStore()
+
+// 组件实例ID，用于调试
+const instanceId = ref(`mw_${Date.now().toString(36)}`)
+
+// 获取路由参数
+const route = useRoute()
+const routeConversationId = computed(() => {
+  const id = route.params.conversationId
+  return typeof id === 'string' ? id : Array.isArray(id) ? id[0] : 'default'
+})
+
+// 有效的会话ID (优先使用props)
+const effectiveConversationId = computed(() => {
+  return props.conversationId || routeConversationId.value
+})
+
+// 监听有效会话ID变化
+watch(
+  effectiveConversationId,
+  (newId, oldId) => {
+    console.log(`[${instanceId.value}] ConversationId changed: ${oldId} -> ${newId}`)
+    if (newId && newId !== state.value.currentConversationId) {
+      console.log(`[${instanceId.value}] Switching to conversation: ${newId}`)
+
+      // 检查会话是否存在
+      if (chatStore.conversations.has(newId)) {
+        conversationActions.switch(newId)
+      } else {
+        console.warn(`[${instanceId.value}] Conversation ${newId} does not exist!`)
+      }
+    }
+  },
+  { immediate: true }
+)
 
 // 监听lastAssistantMessageId的变化，更新流控制的消息ID
 watch(
@@ -57,6 +96,7 @@ const handleGlobalKeydown = (event: KeyboardEvent) => {
     event.preventDefault()
     const messageId = streamControl.state.value.messageId
     if (messageId) {
+      // 使用简单恢复方法，不重新创建请求
       streamControl.simpleResumeStream()
     }
   } else if (event.ctrlKey && event.key === 'k') {
@@ -65,42 +105,6 @@ const handleGlobalKeydown = (event: KeyboardEvent) => {
     conversationActions.create('新的对话')
   }
 }
-
-const chatStore = useNormalizedChatStore()
-
-// 组件实例ID，用于调试
-const instanceId = ref(`mw_${Date.now().toString(36)}`)
-
-// 获取路由参数
-const route = useRoute()
-const routeConversationId = computed(() => {
-  const id = route.params.conversationId
-  return typeof id === 'string' ? id : Array.isArray(id) ? id[0] : 'default'
-})
-
-// 有效的会话ID (优先使用props)
-const effectiveConversationId = computed(() => {
-  return props.conversationId || routeConversationId.value
-})
-
-// 监听有效会话ID变化
-watch(
-  effectiveConversationId,
-  (newId, oldId) => {
-    console.log(`[${instanceId.value}] ConversationId changed: ${oldId} -> ${newId}`)
-    if (newId && newId !== state.value.currentConversationId) {
-      console.log(`[${instanceId.value}] Switching to conversation: ${newId}`)
-
-      // 检查会话是否存在
-      if (chatStore.conversations.has(newId)) {
-        conversationActions.switch(newId)
-      } else {
-        console.warn(`[${instanceId.value}] Conversation ${newId} does not exist!`)
-      }
-    }
-  },
-  { immediate: true }
-)
 
 // 滚动控制相关
 const messageListWrapper = ref<HTMLElement | null>(null)
@@ -270,7 +274,6 @@ defineEmits(['toggle-sidebar'])
 
     <!-- 输入框 -->
     <el-footer class="main-window__footer" height="auto">
-
       <!-- 滚动到底部按钮 -->
       <div
         v-if="showScrollToBottom && !hasNewMessage"
@@ -290,6 +293,8 @@ defineEmits(['toggle-sidebar'])
 .main-window {
   height: 100%;
   background-color: #fff;
+  position: relative; /* 为绝对定位元素提供定位上下文 */
+
   &__content {
     flex: 1;
     padding: 0;
@@ -373,24 +378,23 @@ defineEmits(['toggle-sidebar'])
 }
 
 // 添加滚动到底部按钮样式
-  .scroll-to-bottom-btn {
-    position: absolute;
-    top: -45%;
-    right: 35%;
-    transform: translateX(55%);
-    width: 50px;
-    height: 50px;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-    transition: all 0.3s ease;
-    z-index: 10;
-    box-shadow: 3px 4px 8px rgba(0, 0, 0, 0.15);
-    &:hover {
-        background: rgba(0, 0, 0, 0.1);
-    }
-
+.scroll-to-bottom-btn {
+  position: absolute;
+  top: -45%;
+  right: 35%;
+  transform: translateX(55%);
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  z-index: 10;
+  box-shadow: 3px 4px 8px rgba(0, 0, 0, 0.15);
+  &:hover {
+    background: rgba(0, 0, 0, 0.1);
+  }
 }
 </style>

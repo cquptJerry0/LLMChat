@@ -59,9 +59,17 @@ export function useConversationControl(
    * 会话相关操作
    */
   const conversationActions = {
-    create: (title: string): string => {
+    create: (title?: string): string => {
+      const now = new Date();
+      const formattedDate = now.toLocaleDateString('zh-CN', {
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+      const defaultTitle = `新的对话 - ${formattedDate}`;
       const id = `conv_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
-      return _chatStore.addConversation({ id, title })
+      return _chatStore.addConversation({ id, title: title || defaultTitle })
     },
 
     switch: (id: string): boolean => {

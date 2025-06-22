@@ -1,9 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { useNormalizedChatStore } from '@/stores/normalizedChat'
 
-// 使用路由懒加载
-const HomePage = () => import('@/views/HomePage.vue')
-const TestView = () => import('@/views/TestView.vue')
 const MainPage = () => import('@/views/MainPage/MainPage.vue')
 
 const router = createRouter({
@@ -11,8 +8,7 @@ const router = createRouter({
   routes: [
     {
       path: '/',
-      name: 'home',
-      component: HomePage,
+      redirect: { name: 'conversation', params: { conversationId: 'default' } }
     },
     {
       path: '/chat',
@@ -23,11 +19,6 @@ const router = createRouter({
       name: 'conversation',
       component: MainPage,
       props: true
-    },
-    {
-      path: '/test',
-      name: 'test',
-      component: TestView,
     },
   ],
 })

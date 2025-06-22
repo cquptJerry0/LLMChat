@@ -1,15 +1,15 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, inject } from 'vue'
 import { useConversationControlChild } from '@/composables/useConversationControl'
-import { useTheme } from '@/composables/useTheme'
-import ChatIcon from '@/components/ChatIcon.vue'
 import ChatButton from '@/components/ChatButton.vue'
 import SettingPanel from './components/SettingPanel.vue'
 import ThemePanel from './components/ThemePanel.vue'
 import { useNormalizedChatStore } from '@/stores/normalizedChat'
+import { useRouter } from 'vue-router'
 
+const router = useRouter()
 // 使用父组件提供的会话控制
-const { state } = useConversationControlChild()
+const { state, conversationActions } = useConversationControlChild()
 const chatStore = useNormalizedChatStore()
 
 // 编辑标题相关状态
@@ -18,10 +18,9 @@ const editedTitle = ref('')
 
 // 计算当前会话标题
 const conversationTitle = computed(() => {
-  if (!state.value.currentConversationId) return '新的对话'
 
   // 查找当前会话
-  const conversation = chatStore.conversations.get(state.value.currentConversationId)
+  const conversation = chatStore.conversations.get(state.value.currentConversationId || '')
 
   // 如果会话存在且有标题，直接返回
   if (conversation?.title) {
@@ -33,7 +32,7 @@ const conversationTitle = computed(() => {
     msg => msg.conversationId === state.value.currentConversationId
   )
 
-  return firstMessage?.content.substring(0, 20) || '新的对话'
+  return firstMessage?.content.substring(0, 20) || ''
 })
 
 // 开始编辑标题
@@ -52,23 +51,10 @@ const startEditingTitle = () => {
 // 保存编辑的标题
 const saveTitle = () => {
   if (state.value.currentConversationId && editedTitle.value.trim()) {
-    console.log('手动设置标题:', editedTitle.value.trim());
     chatStore.updateConversation(state.value.currentConversationId, {
       title: editedTitle.value.trim(),
       titleSetByUser: true
     })
-
-    // 立即检查标题是否设置成功
-    setTimeout(() => {
-      const conversationId = state.value.currentConversationId;
-      if (conversationId) {
-        const conversation = chatStore.conversations.get(conversationId);
-        console.log('标题设置后的会话状态:', {
-          title: conversation?.title,
-          titleSetByUser: conversation?.titleSetByUser
-        });
-      }
-    }, 0);
   }
   isEditingTitle.value = false
 }
@@ -100,21 +86,40 @@ const openSettingPanel = () => {
 const openThemePanel = () => {
   themePanelRef.value?.open()
 }
-
+// 创建新会话
+const createNewConversation = () => {
+  const newId = conversationActions.create();
+  router.push({
+    name: 'conversation',
+    params: { conversationId: newId }
+  });
+}
 // 定义事件
 defineEmits(['toggle-sidebar'])
+
+// 获取侧边栏折叠状态
+const isSidebarCollapsed = inject('isSidebarCollapsed')
 </script>
 
 <template>
   <el-header class="chat-header">
     <!-- 左侧 -->
     <div class="chat-header__left">
-      <ChatButton
-        type="default"
-        :text="true"
-        icon="back"
-        @click="$emit('toggle-sidebar')"
-      />
+      <template v-if="isSidebarCollapsed">
+        <ChatButton
+          type="default"
+          :text="true"
+          icon="back"
+          @click="$emit('toggle-sidebar')"
+        />
+
+        <ChatButton
+          type="default"
+          :text="true"
+          icon="new"
+          @click="createNewConversation"
+        />
+      </template>
 
       <!-- 标题显示/编辑模式切换 -->
       <div v-if="!isEditingTitle" class="chat-header__title-container" @click="startEditingTitle">

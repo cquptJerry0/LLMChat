@@ -40,16 +40,12 @@ watch(
       } else {
         // 如果对话不存在，创建新对话
         console.log(`Creating new conversation as ${newId} does not exist`)
-        const currentDate = new Date();
-        const formattedDate = `${currentDate.getMonth() + 1}月${currentDate.getDate()}日 ${currentDate.getHours()}:${currentDate.getMinutes().toString().padStart(2, '0')}`;
-        const defaultTitle = `新对话 - ${formattedDate}`;
-
-        const newConversationId = conversationActions.create(defaultTitle);
+        const newConversationId = conversationActions.create('新的对话')
         // 更新路由到新创建的对话
         router.replace({
           name: 'conversation',
           params: { conversationId: newConversationId }
-        });
+        })
       }
     }
   },
@@ -152,16 +148,12 @@ const clearAllData = () => {
     // 重新初始化
     chatStore.initializeFromStorage()
     // 创建新会话
-    const currentDate = new Date();
-    const formattedDate = `${currentDate.getMonth() + 1}月${currentDate.getDate()}日 ${currentDate.getHours()}:${currentDate.getMinutes().toString().padStart(2, '0')}`;
-    const defaultTitle = `新对话 - ${formattedDate}`;
-
-    const newConversationId = conversationActions.create(defaultTitle);
+    const newConversationId = conversationActions.create('新的对话')
     // 更新路由到新创建的对话
     router.replace({
       name: 'conversation',
       params: { conversationId: newConversationId }
-    });
+    })
   }
 }
 

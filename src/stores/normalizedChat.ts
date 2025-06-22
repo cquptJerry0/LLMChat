@@ -122,21 +122,14 @@ export const useNormalizedChatStore = defineStore('normalized-chat', () => {
 
   // 添加会话
   const addConversation = (conversationData: { id: string, title: string }) => {
-    const isDefaultTitle = conversationData.title === '新的对话';
 
     conversations.value.set(conversationData.id, {
       ...conversationData,
       createdAt: Date.now(),
       lastUpdatedAt: Date.now(),
-      titleSetByUser: !isDefaultTitle, // 如果不是默认标题，则标记为用户设置
+      titleSetByUser: false,
       messages: []
     } as Conversation)
-
-    console.log('创建会话:', {
-      id: conversationData.id,
-      title: conversationData.title,
-      titleSetByUser: !isDefaultTitle
-    });
 
     conversationMessages.value.set(conversationData.id, [])
 
@@ -219,13 +212,13 @@ export const useNormalizedChatStore = defineStore('normalized-chat', () => {
           minute: '2-digit'
         });
 
-        // 如果是第一条消息，使用消息内容作为标题（最多20个字符）
+        // 如果是第一条消息，使用消息内容作为标题（最多12个字符）
         if (convMsgs.length === 0) {
-          const newTitle = messageData.content.length > 20
-            ? `${messageData.content.substring(0, 20)}...`
+          const newTitle = messageData.content.length > 12
+            ? `${messageData.content.substring(0, 12)}...`
             : messageData.content;
 
-          conversation.title = `${formattedDate} - ${newTitle}`;
+          conversation.title = `${newTitle} - ${formattedDate}`;
         }
       }
 

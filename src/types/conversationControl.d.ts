@@ -16,7 +16,7 @@ export interface ConversationState {
 
 // 会话操作接口
 export interface ConversationActions {
-  create: (title: string) => string
+  create: (title?: string) => string
   switch: (id: string) => boolean
   delete: (id: string) => boolean
 }
