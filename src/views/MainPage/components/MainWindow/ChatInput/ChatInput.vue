@@ -165,7 +165,7 @@ const handleRecordingChange = (isRecording: boolean) => {
             <ChatButton
               v-else-if="streamState.isStreaming"
               icon="pause"
-              type="warning"
+              type="primary"
               tooltip="中断生成 (Esc)"
               iconColor="var(--icon-color-secondary)"
               circle
@@ -174,7 +174,7 @@ const handleRecordingChange = (isRecording: boolean) => {
             <ChatButton
               v-else-if="streamState.isPaused"
               icon="play"
-              type="success"
+              type="primary"
               tooltip="继续生成 (Ctrl+R)"
               iconColor="var(--icon-color-secondary)"
               circle

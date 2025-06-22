@@ -7,6 +7,7 @@ export interface Conversation {
   title: string;
   createdAt: number;
   lastUpdatedAt?: number;
+  titleSetByUser?: boolean; // 标记标题是否由用户手动设置
   messages: Message[];
 }
 

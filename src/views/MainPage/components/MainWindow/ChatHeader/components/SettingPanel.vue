@@ -41,7 +41,7 @@ defineExpose({
 </script>
 
 <template>
-  <el-drawer v-model="visible" title="设置" direction="rtl" size="350px">
+  <el-drawer v-model="visible" title="设置" direction="rtl" size="350px" class="settings-drawer">
     <div class="settings-panel">
       <!-- 模型选择 -->
       <div class="settings-panel__item">
@@ -82,6 +82,9 @@ defineExpose({
               <el-icon><QuestionFilled /></el-icon>
             </el-tooltip>
           </div>
+          <a href="https://cloud.siliconflow.cn/account/ak" target="_blank" class="settings-panel__link">
+            获取 API Key
+          </a>
         </div>
         <el-input
           v-model="settingStore.settings.apiKey"
@@ -144,6 +147,60 @@ defineExpose({
           />
         </div>
       </div>
+
+      <!-- Top-P -->
+      <div class="settings-panel__item">
+        <div class="settings-panel__label">
+          Top-P
+          <el-tooltip content="核采样阈值" placement="top">
+            <el-icon><QuestionFilled /></el-icon>
+          </el-tooltip>
+        </div>
+        <div class="settings-panel__control">
+          <el-slider
+            v-model="settingStore.settings.topP"
+            :min="0"
+            :max="1"
+            :step="0.1"
+            :show-tooltip="false"
+            class="settings-panel__slider"
+          />
+          <el-input-number
+            v-model="settingStore.settings.topP"
+            :min="0"
+            :max="1"
+            :step="0.1"
+            controls-position="right"
+          />
+        </div>
+      </div>
+
+      <!-- Top-K -->
+      <div class="settings-panel__item">
+        <div class="settings-panel__label">
+          Top-K
+          <el-tooltip content="保留概率最高的 K 个词" placement="top">
+            <el-icon><QuestionFilled /></el-icon>
+          </el-tooltip>
+        </div>
+        <div class="settings-panel__control">
+          <el-slider
+            v-model="settingStore.settings.topK"
+            :min="1"
+            :max="100"
+            :step="1"
+            :show-tooltip="false"
+            class="settings-panel__slider"
+          />
+          <el-input-number
+            v-model="settingStore.settings.topK"
+            :min="1"
+            :max="100"
+            :step="1"
+            controls-position="right"
+          />
+        </div>
+      </div>
     </div>
   </el-drawer>
 </template>
@@ -152,6 +209,7 @@ defineExpose({
 .settings-panel {
   padding: 20px;
   color: var(--text-primary);
+  background-color: var(--background-color-light);
 
   &__item {
     margin-bottom: 24px;
@@ -163,7 +221,7 @@ defineExpose({
     gap: 8px;
     margin-bottom: 8px;
     font-weight: 500;
-    color: var(--text-primary);
+    color: #e0e0e0; /* 浅灰色文字 */
   }
 
   &__label-row {
@@ -171,13 +229,24 @@ defineExpose({
     justify-content: space-between;
     align-items: center;
     margin-bottom: 8px;
-    color: var(--text-primary);
+    color: #e0e0e0; /* 浅灰色文字 */
   }
 
   &__label-with-tooltip {
     display: flex;
     align-items: center;
     gap: 8px;
+  }
+
+  &__link {
+    font-size: 14px;
+    color: black; /* 黑色链接 */
+    text-decoration: none;
+
+    &:hover {
+      text-decoration: underline;
+      color: #333; /* 悬停时深灰色 */
+    }
   }
 
   &__control {
@@ -197,5 +266,79 @@ defineExpose({
   :deep(.el-input-number) {
     width: 120px;
   }
+
+  :deep(.el-icon.el-drawer__close:hover) {
+    color: var(--text-primary) !important;
+  }
+
+  /* 暗色主题下的元素样式覆盖 */
+  :deep(.el-input) {
+    --el-input-bg-color: var(--background-color-base);
+    --el-input-border-color: var(--border-color-base);
+    --el-input-text-color: var(--text-primary);
+  }
+
+  :deep(.el-select) {
+    --el-select-border-color-hover: #555;
+    --el-select-text-color: black;
+    --el-select-input-text-color: black;
+  }
+
+  :deep(.el-select__wrapper.is-focused) {
+    box-shadow: rgb(186, 192, 199) 0px 0px 0px 1px inset !important;
+  }
+
+  /* 修改选择框中显示的文本颜色 */
+  :deep(.el-select .el-input__inner) {
+    color: black;
+  }
+
+  :deep(.el-slider) {
+    --el-slider-main-bg-color: #b1bac2;
+  }
+
+  :deep(.el-switch) {
+    --el-switch-on-color: black;
+  }
+
+  :deep(.el-tooltip__trigger) {
+    --el-color-primary: black;
+  }
+
+  :deep(.el-input__wrapper) {
+    box-shadow: 0px 0px 0px 0px;
+  }
+
+  :deep(.el-input__wrapper.is-focus) {
+    box-shadow: rgb(186, 192, 199) 0px 0px 0px 1px inset !important;
+  }
+}
+</style>
+
+<style>
+/* 修改下拉选择框中选中项的文字颜色和背景色 */
+.el-select-dropdown__item.selected {
+  color: black !important;
+  background-color: #f0f0f0 !important;
+}
+
+/* 修改下拉框中的文字颜色 */
+.el-select-dropdown__item {
+  color: #333 !important;
+}
+
+/* 修改下拉框的焦点边框颜色 */
+.el-popper.is-light .el-popper__arrow::before {
+  border-color: #dcdfe6 !important;
+}
+
+/* 修改下拉框的边框颜色 */
+.el-popper.is-light {
+  border-color: #dcdfe6 !important;
+}
+
+.el-drawer__header .el-drawer__close-btn .el-icon.el-drawer__close:hover {
+  color: #333 !important;
+  background-color: var(--background-color-light) !important;
 }
 </style>

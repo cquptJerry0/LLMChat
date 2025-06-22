@@ -25,7 +25,7 @@ const props = defineProps<{
 const { messageActions } = useConversationControlChild()
 
 // 获取流控制状态
-const streamControl = useStreamControlChild() as any // 临时使用any类型避免类型错误
+const streamControl = useStreamControlChild() as any
 const { state: streamState } = streamControl
 
 // 如果是当前消息且是助手消息，设置为活跃消息

@@ -122,12 +122,22 @@ export const useNormalizedChatStore = defineStore('normalized-chat', () => {
 
   // 添加会话
   const addConversation = (conversationData: { id: string, title: string }) => {
+    const isDefaultTitle = conversationData.title === '新的对话';
+
     conversations.value.set(conversationData.id, {
       ...conversationData,
       createdAt: Date.now(),
       lastUpdatedAt: Date.now(),
+      titleSetByUser: !isDefaultTitle, // 如果不是默认标题，则标记为用户设置
       messages: []
     } as Conversation)
+
+    console.log('创建会话:', {
+      id: conversationData.id,
+      title: conversationData.title,
+      titleSetByUser: !isDefaultTitle
+    });
+
     conversationMessages.value.set(conversationData.id, [])
 
     if (!currentConversationId.value) {
@@ -195,7 +205,30 @@ export const useNormalizedChatStore = defineStore('normalized-chat', () => {
 
     const conversation = conversations.value.get(messageData.conversationId)
     if (conversation) {
+      // 更新会话的最后修改时间
       conversation.lastUpdatedAt = Date.now()
+
+      // 自动更新标题逻辑：只有当消息是用户消息且会话标题未被用户设置时才更新
+      if (messageData.role === 'user' && !conversation.titleSetByUser) {
+        // 使用当前日期时间作为默认标题
+        const now = new Date();
+        const formattedDate = now.toLocaleDateString('zh-CN', {
+          month: '2-digit',
+          day: '2-digit',
+          hour: '2-digit',
+          minute: '2-digit'
+        });
+
+        // 如果是第一条消息，使用消息内容作为标题（最多20个字符）
+        if (convMsgs.length === 0) {
+          const newTitle = messageData.content.length > 20
+            ? `${messageData.content.substring(0, 20)}...`
+            : messageData.content;
+
+          conversation.title = `${formattedDate} - ${newTitle}`;
+        }
+      }
+
       conversations.value.set(messageData.conversationId, conversation)
     }
 

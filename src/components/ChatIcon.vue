@@ -19,9 +19,8 @@ const iconMap: Record<string, string> = {
   'regenerate': 'mdi:refresh',
   'clock': 'mdi:clock-outline',
   'scroll-down': 'mdi:arrow-down',
-  'pause': 'mdi:pause-circle',
-  'play': 'mdi:play-circle',
-
+  'pause': 'mdi:pause',
+  'play': 'mdi:play',
   // 状态图标
   'loading': 'mdi:loading',
   'success': 'mdi:check-circle-outline',

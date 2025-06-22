@@ -21,22 +21,9 @@ const conversations = computed(() => {
   return Array.from(chatStore.conversations.values())
     .sort((a, b) => (b.lastUpdatedAt || 0) - (a.lastUpdatedAt || 0))
     .map(conversation => {
-      // 只显示标题，溢出省略
-      let previewTitle = conversation.title
-      const messageIds = chatStore.conversationMessages.get(conversation.id) || []
-      if (messageIds.length > 0) {
-        const userMessage = messageIds
-          .map(id => chatStore.messages.get(id))
-          .find(msg => msg?.role === 'user')
-        if (userMessage && userMessage.content) {
-          previewTitle = userMessage.content.length > 20
-            ? `${userMessage.content.substring(0, 20)}...`
-            : userMessage.content
-        }
-      }
       return {
         id: conversation.id,
-        title: previewTitle,
+        title: conversation.title,
         active: conversation.id === chatStore.currentConversationId,
       }
     })
@@ -56,7 +43,10 @@ const editConversation = (id: string) => {
   if (!conversation) return
   const newTitle = prompt('请输入新的会话标题', conversation.title)
   if (newTitle && newTitle.trim()) {
-    chatStore.updateConversation(id, { title: newTitle.trim() })
+    chatStore.updateConversation(id, {
+      title: newTitle.trim(),
+      titleSetByUser: true
+    })
   }
 }
 
