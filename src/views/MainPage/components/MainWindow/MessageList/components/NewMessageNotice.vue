@@ -35,32 +35,32 @@ const emit = defineEmits<{
   position: absolute;
   left: 50%;
   transform: translateX(-50%);
-  background-color: var(--primary-color);
+  background-color: var(--text-placeholder);
   color: white;
-  padding: $spacing-sm $spacing-md;
-  border-radius: $border-radius-lg;
+  padding: $spacing-mini $spacing-base;
+  border-radius: $border-radius-base;
   cursor: pointer;
-  box-shadow: $box-shadow-md;
+  box-shadow: $box-shadow-base;
   z-index: 10;
   transition: all 0.3s ease;
 
   &:hover {
-    background-color: var(--primary-color-dark);
+    background-color: var(--text-secondary);
     transform: translateX(-50%) translateY(-2px);
   }
 
   &.bottom {
-    bottom: $spacing-md;
+    bottom: $spacing-base;
   }
 
   &.top {
-    top: $spacing-md;
+    top: $spacing-base;
   }
 
   .notice-content {
     display: flex;
     align-items: center;
-    gap: $spacing-sm;
+    gap: $spacing-mini;
 
     .notice-icon {
       display: flex;

@@ -48,7 +48,8 @@ defineEmits(['toggle-sidebar'])
     <!-- 左侧 -->
     <div class="chat-header__left">
       <ChatButton
-        type="text"
+        type="default"
+        :text="true"
         icon="back"
         @click="$emit('toggle-sidebar')"
       />
@@ -58,12 +59,14 @@ defineEmits(['toggle-sidebar'])
     <!-- 右侧 -->
     <div class="chat-header__right">
       <ChatButton
-        type="text"
+        type="default"
+        :text="true"
         icon="theme"
         @click="openThemePanel"
       />
       <ChatButton
-        type="text"
+        type="default"
+        :text="true"
         icon="setting"
         @click="openSettingPanel"
       />

@@ -18,6 +18,7 @@ const iconMap: Record<string, string> = {
   'check': 'mdi:check',
   'regenerate': 'mdi:refresh',
   'clock': 'mdi:clock-outline',
+  'scroll-down': 'mdi:arrow-down',
 
   // 状态图标
   'loading': 'mdi:loading',

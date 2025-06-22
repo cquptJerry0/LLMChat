@@ -1,12 +1,14 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted, computed, watch, ref } from 'vue'
+import { onMounted, onUnmounted, computed, watch, ref, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
 import { useConversationControlChild } from '@/composables/useConversationControl'
 import { useNormalizedChatStore } from '@/stores/normalizedChat'
+import { useResizeObserver, useScroll, useThrottleFn } from '@vueuse/core'
 import ChatHeader from '../components/MainWindow/ChatHeader/ChatHeader.vue'
 import MessageList from '../components/MainWindow/MessageList/MessageList.vue'
 import ChatInput from '../components/MainWindow/ChatInput/ChatInput.vue'
 import { useStreamControl } from '@/composables/useStreamControl_'
+import ChatIcon from '@/components/ChatIcon.vue'
 
 // 接收props
 const props = defineProps<{
@@ -97,13 +99,112 @@ watch(
   { immediate: true }
 )
 
-// 记录组件生命周期
+// 滚动控制相关
+const messageListWrapper = ref<HTMLElement | null>(null)
+const isAutoScrollEnabled = ref(true)
+const hasNewMessage = ref(false)
+const isUserScrolling = ref(false)
+const lastSeenMessageId = ref('') // 记录最后看到的消息ID
+const showScrollToBottom = ref(false) // 控制滚动到底部按钮显示
+
+// 处理滚动事件
+function handleScroll() {
+  if (!messageListWrapper.value) return
+
+  const { scrollHeight, clientHeight, scrollTop } = messageListWrapper.value
+  const isAtBottom = Math.abs(scrollHeight - clientHeight - scrollTop) < 50
+
+  // 显示/隐藏滚动到底部按钮 (不在底部时显示)
+  showScrollToBottom.value = !isAtBottom
+
+  isAutoScrollEnabled.value = isAtBottom
+  isUserScrolling.value = !isAtBottom
+
+  // 如果滚动到底部,更新最后看到的消息ID
+  if (isAtBottom && state.value.currentMessages?.length > 0) {
+    const lastMessage = state.value.currentMessages[state.value.currentMessages.length - 1]
+    if (lastMessage) {
+      lastSeenMessageId.value = lastMessage.id
+    }
+  }
+}
+
+// 节流后的滚动处理函数
+const handleScrollThrottled = useThrottleFn(handleScroll, 100)
+
+// 使用 VueUse 的滚动跟踪
+const { y: scrollTop } = useScroll(messageListWrapper, {
+  throttle: 100, // 增加节流以提高性能
+  onScroll: () => handleScrollThrottled() // 使用箭头函数避免循环引用
+})
+
+// 检查是否有新消息
+const checkNewMessages = () => {
+  // 获取当前消息
+  const messages = state.value.currentMessages || []
+  if (messages.length === 0) return false
+
+  // 检查是否正在生成消息
+  const isStreaming = streamControl.state.value.isStreaming
+
+  // 如果正在生成消息且用户不在底部,则显示新消息提示
+  if (isStreaming && !isAutoScrollEnabled.value) {
+    return true
+  }
+
+  // 最后一条消息ID
+  const lastMessageId = messages[messages.length - 1]?.id
+
+  // 如果有新消息(ID不同)且用户不在底部,则显示新消息提示
+  if (lastMessageId !== lastSeenMessageId.value && !isAutoScrollEnabled.value) {
+    return true
+  }
+
+  return false
+}
+
+// 滚动到底部
+const scrollToBottom = (force = false) => {
+  if (!messageListWrapper.value || (!isAutoScrollEnabled.value && !force)) return
+
+  nextTick(() => {
+    if (messageListWrapper.value) {
+      messageListWrapper.value.scrollTop = messageListWrapper.value.scrollHeight
+
+      // 更新最后看到的消息ID
+      if (state.value.currentMessages?.length > 0) {
+        const lastMessage = state.value.currentMessages[state.value.currentMessages.length - 1]
+        if (lastMessage) {
+          lastSeenMessageId.value = lastMessage.id
+        }
+      }
+
+      hasNewMessage.value = false
+    }
+  })
+}
+
+// 点击新消息提示
+const handleNewMessageClick = () => {
+  scrollToBottom(true)
+  hasNewMessage.value = false
+}
+
+// 初始化最后看到的消息ID和记录组件生命周期
 onMounted(() => {
   console.log(`[${instanceId.value}] MainWindow mounted with conversationId: ${effectiveConversationId.value}`)
   console.log(`[${instanceId.value}] Current state conversationId: ${state.value.currentConversationId}`)
 
   // 添加全局键盘事件
   document.addEventListener('keydown', handleGlobalKeydown, true)
+
+  // 初始化最后看到的消息ID
+  if (state.value.currentMessages?.length > 0) {
+    const lastMessage = state.value.currentMessages[state.value.currentMessages.length - 1]
+    if (lastMessage) {
+      lastSeenMessageId.value = lastMessage.id
+    }
+  }
 })
 
 onUnmounted(() => {
@@ -111,6 +212,27 @@ onUnmounted(() => {
 
   // 移除全局键盘事件
   document.removeEventListener('keydown', handleGlobalKeydown, true)
+})
+
+// 监听消息变化和流状态变化
+watch(
+  [() => state.value.currentMessages, () => streamControl.state.value],
+  () => {
+    if (state.value.isGenerating || isAutoScrollEnabled.value) {
+      scrollToBottom()
+    } else {
+      // 检查是否有新消息
+      hasNewMessage.value = checkNewMessages()
+    }
+  },
+  { deep: true }
+)
+
+// 监听容器大小变化
+useResizeObserver(messageListWrapper, () => {
+  if (isAutoScrollEnabled.value) {
+    scrollToBottom()
+  }
 })
 
 // 定义事件
@@ -124,15 +246,36 @@ defineEmits(['toggle-sidebar'])
 
     <!-- 消息列表 -->
     <el-main class="main-window__content">
-      <div class="message-list-wrapper">
+      <div
+        ref="messageListWrapper"
+        class="message-list-wrapper"
+      >
         <div class="main-window__content-container">
           <MessageList />
         </div>
+      </div>
+
+      <!-- 新消息提示 -->
+      <div
+        v-if="hasNewMessage"
+        class="new-message-notice"
+        @click="handleNewMessageClick"
+      >
+        <span>新消息</span>
       </div>
     </el-main>
 
     <!-- 输入框 -->
     <el-footer class="main-window__footer" height="auto">
+
+      <!-- 滚动到底部按钮 -->
+      <div
+        v-if="showScrollToBottom && !hasNewMessage"
+        class="scroll-to-bottom-btn"
+        @click="scrollToBottom(true)"
+      >
+        <ChatIcon name="scroll-down" size="20"/>
+      </div>
       <div class="main-window__footer-container">
         <ChatInput />
       </div>
@@ -155,14 +298,16 @@ defineEmits(['toggle-sidebar'])
     max-width: 780px;
     margin: 0 auto;
     width: 100%;
+    height: auto;
   }
 
-  /* 创建一个内容包装器 */
+  /* 滚动容器 */
   .message-list-wrapper {
     width: 100%;
     height: 100%;
-    overflow-y: auto;
+    overflow-y: scroll;
     overflow-x: hidden;
+    position: relative;
 
     &::-webkit-scrollbar {
       width: 8px;
@@ -196,7 +341,53 @@ defineEmits(['toggle-sidebar'])
     height: auto;
     background-color: #fff;
     padding: 0;
+    position: relative; /* 添加相对定位，作为滚动按钮的定位父元素 */
   }
 }
 
+// 添加新消息提示样式
+.new-message-notice {
+  position: absolute;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--info-color);
+  color: white;
+  padding: 8px 16px;
+  border-radius: 20px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  transition: all 0.3s ease;
+  z-index: 10;
+
+  &:hover {
+    transform: translateX(-50%) translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  }
+}
+
+// 添加滚动到底部按钮样式
+  .scroll-to-bottom-btn {
+    position: absolute;
+    top: -45%;
+    right: 35%;
+    transform: translateX(55%);
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    z-index: 10;
+    box-shadow: 3px 4px 8px rgba(0, 0, 0, 0.15);
+    &:hover {
+        background: rgba(0, 0, 0, 0.1);
+    }
+
+}
 </style>

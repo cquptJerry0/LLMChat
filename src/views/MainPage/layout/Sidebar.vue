@@ -53,7 +53,8 @@ const createNewConversation = () => {
     <!-- 底部区域 -->
     <div class="sidebar__footer">
       <ChatButton
-        type="text"
+        type="default"
+        :text="true"
         icon="setting"
         class="sidebar__settings-btn"
       >
