@@ -260,7 +260,7 @@ const isLatestAssistantMessage = (messageId: string) => {
           :key="latestMessage.id"
           :message="latestMessage"
           :isLatestMessage="true"
-          class="message-list__message message-list__message--streaming"
+          class="message-list__message"
         />
       </div>
     </template>
@@ -318,12 +318,6 @@ const isLatestAssistantMessage = (messageId: string) => {
     &--bottom {
       margin-top: 8px;
     }
-  }
-
-  @keyframes pulse {
-    0% { opacity: 1; }
-    50% { opacity: 0.8; }
-    100% { opacity: 1; }
   }
 }
 

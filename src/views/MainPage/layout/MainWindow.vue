@@ -60,6 +60,10 @@ const handleGlobalKeydown = (event: KeyboardEvent) => {
       // 使用简单恢复方法，不重新创建请求
       streamControl.simpleResumeStream()
     }
+  } else if (event.ctrlKey && event.key === 'k') {
+    // Ctrl+K，新建会话
+    event.preventDefault()
+    conversationActions.create('新的对话')
   }
 }
 

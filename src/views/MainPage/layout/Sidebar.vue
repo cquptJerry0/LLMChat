@@ -10,7 +10,7 @@ import ChatIcon from '@/components/ChatIcon.vue'
 const router = useRouter()
 
 // 使用父组件提供的会话控制
-const { state, conversationActions, messageActions } = useConversationControlChild()
+const { conversationActions } = useConversationControlChild()
 
 // 创建新会话
 const createNewConversation = () => {

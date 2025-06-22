@@ -34,7 +34,7 @@ const placeholder = computed(() => {
     ? '正在生成回复，按 Esc 中断...'
     : streamState.value.isPaused
       ? '生成已中断，按 Ctrl+R 继续...'
-      : '输入消息，按 Ctrl+Enter 发送...'
+      : '输入消息，按 Enter 发送，按 Shift+Enter 换行...'
 })
 
 // 处理发送按钮图标颜色
@@ -116,28 +116,6 @@ const handleRecordingChange = (isRecording: boolean) => {
   console.log('语音识别状态:', isRecording)
 }
 
-// 处理键盘事件
-const handleKeydown = (event: KeyboardEvent) => {
-  // 如果是在输入法编辑状态，不处理快捷键
-  if (event.isComposing) return
-
-  // Ctrl+Enter 发送消息
-  if (event.ctrlKey && event.key === 'Enter') {
-    event.preventDefault()
-    event.stopPropagation()
-    handleSend()
-    return
-  }
-
-  // Ctrl+R 继续生成
-  if (event.ctrlKey && event.key === 'r' && streamState.value.isPaused) {
-    event.preventDefault()
-    event.stopPropagation()
-    handleResume()
-  }
-}
-
-// 移除全局键盘事件监听，因为已经在MainWindow中处理了
 </script>
 
 <template>
@@ -153,9 +131,7 @@ const handleKeydown = (event: KeyboardEvent) => {
         :placeholder="placeholder"
         :loading="streamState.isStreaming"
         clearable
-        :submitType=undefined
         :submit-btn-disabled="!senderValue.trim()"
-        @keydown="handleKeydown"
         @submit="handleSend"
         @cancel="handleStop"
         @recording-change="handleRecordingChange"

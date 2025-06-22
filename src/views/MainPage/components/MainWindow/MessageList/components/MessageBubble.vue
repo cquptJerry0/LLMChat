@@ -18,7 +18,7 @@ const props = defineProps<{
     parentId: string | null
     conversationId: string
   },
-  isLatestMessage?: boolean
+  isLatestMessage?: boolean,
 }>()
 
 // 使用父组件提供的会话控制

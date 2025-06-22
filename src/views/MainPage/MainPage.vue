@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { onMounted, ref, onUnmounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { useTheme } from '@/composables/useTheme'
 import { useConversationControl } from '@/composables/useConversationControl'
 import { useNormalizedChatStore } from '@/stores/normalizedChat'
 import { Monitor, Close } from '@element-plus/icons-vue'
@@ -154,11 +153,12 @@ const clearAllData = () => {
   }
 }
 
+
 // 向外部提供方法
 defineExpose({
   exportData,
   clearAllData,
-  toggleStreamMonitor
+  toggleStreamMonitor,
 })
 </script>
 
