@@ -166,35 +166,13 @@ export const useStreamStore = defineStore(
       const stream = streams.value.get(streamId)
 
       if (stream && stream.status === StreamStatus.PAUSED) {
-        // 不创建新的 AbortController，继续使用现有的
-        // const newController = new AbortController()
-
+        // 只修改状态，不创建新的AbortController
         stream.status = StreamStatus.STREAMING
-        // 关闭暂停标志
         stream.isPaused = false
         stream.pauseTime = undefined
-
-        // 如果有缓冲的内容，一次性更新到UI
-        if (stream.contentBuffer) {
-          chatStore.updateMessage(messageId, {
-            content: stream.contentBuffer,
-            reasoning_content: stream.reasoningBuffer,
-            completion_tokens: stream.lastCompletionTokens,
-            speed: 0
-          })
-
-          // 同步累积内容
-          stream.accumulatedContent = stream.contentBuffer
-          stream.accumulatedReasoning = stream.reasoningBuffer
-
-          // 清空缓冲区
-          stream.contentBuffer = ''
-          stream.reasoningBuffer = ''
-        }
-
         streams.value.set(streamId, stream)
 
-        // 保存恢复状态
+        // 保存状态到localStorage
         persistStreamState(messageId, {
           content: stream.accumulatedContent,
           reasoning_content: stream.accumulatedReasoning,
@@ -205,7 +183,7 @@ export const useStreamStore = defineStore(
           savedAt: Date.now()
         })
 
-        // 返回现有的 AbortController
+        // 返回AbortController信号和恢复信息
         return {
           signal: stream.abortController?.signal || (new AbortController()).signal,
           resumeInfo: {

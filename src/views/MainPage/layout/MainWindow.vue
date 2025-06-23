@@ -7,7 +7,7 @@ import { useResizeObserver, useScroll, useThrottleFn } from '@vueuse/core'
 import ChatHeader from '../components/MainWindow/ChatHeader/ChatHeader.vue'
 import MessageList from '../components/MainWindow/MessageList/MessageList.vue'
 import ChatInput from '../components/MainWindow/ChatInput/ChatInput.vue'
-import { useStreamControl } from '@/composables/useStreamControl_'
+import { useStreamControl } from '@/composables/useStreamControl'
 import ChatIcon from '@/components/ChatIcon.vue'
 
 // 接收props
@@ -17,9 +17,6 @@ const props = defineProps<{
 
 // 使用父组件提供的会话控制
 const { state, conversationActions } = useConversationControlChild()
-
-// 获取侧边栏折叠状态
-const isSidebarCollapsed = inject('isSidebarCollapsed', ref(false))
 
 // 初始化流控制，使用当前的lastAssistantMessageId
 const streamControl = useStreamControl(state.value.lastAssistantMessageId || '')
@@ -97,14 +94,14 @@ const handleGlobalKeydown = (event: KeyboardEvent) => {
     const messageId = streamControl.state.value.messageId
     if (messageId) {
       // 使用简单恢复方法，不重新创建请求
-      streamControl.simpleResumeStream()
+      streamControl.resumeStream()
     }
   } else if (event.ctrlKey && event.key === 'k') {
     // Ctrl+K，新建会话
     event.preventDefault()
     conversationActions.create('新的对话')
-  }
-}
+      }
+    }
 
 // 滚动控制相关
 const messageListWrapper = ref<HTMLElement | null>(null)
@@ -135,15 +132,6 @@ function handleScroll() {
     }
   }
 }
-
-// 节流后的滚动处理函数
-const handleScrollThrottled = useThrottleFn(handleScroll, 100)
-
-// 使用 VueUse 的滚动跟踪
-const { y: scrollTop } = useScroll(messageListWrapper, {
-  throttle: 100, // 增加节流以提高性能
-  onScroll: () => handleScrollThrottled() // 使用箭头函数避免循环引用
-})
 
 // 检查是否有新消息
 const checkNewMessages = () => {
@@ -378,23 +366,23 @@ defineEmits(['toggle-sidebar'])
 }
 
 // 添加滚动到底部按钮样式
-.scroll-to-bottom-btn {
-  position: absolute;
-  top: -45%;
-  right: 35%;
-  transform: translateX(55%);
-  width: 50px;
-  height: 50px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  z-index: 10;
-  box-shadow: 3px 4px 8px rgba(0, 0, 0, 0.15);
-  &:hover {
-    background: rgba(0, 0, 0, 0.1);
-  }
+  .scroll-to-bottom-btn {
+    position: absolute;
+    top: -45%;
+    right: 35%;
+    transform: translateX(55%);
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    z-index: 10;
+    box-shadow: 3px 4px 8px rgba(0, 0, 0, 0.15);
+    &:hover {
+        background: rgba(0, 0, 0, 0.1);
+    }
 }
 </style>

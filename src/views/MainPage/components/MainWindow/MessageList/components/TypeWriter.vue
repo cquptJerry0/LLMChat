@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch, onMounted, nextTick, computed } from 'vue'
+import { ref, watch, onMounted, nextTick, computed, onBeforeUnmount } from 'vue'
 import { md } from '@/utils/markdown'
 
 // 定义 props
@@ -15,6 +15,9 @@ const displayText = ref('')
 const isComplete = ref(false)
 // 光标类型
 const CURSOR_HTML = '<span class="typewriter-cursor"></span>'
+// 动画控制
+const animationId = ref<number | null>(null)
+const targetContent = ref('')
 
 // 处理Markdown内容，在适当位置插入光标
 const processMarkdown = (text: string): string => {
@@ -90,9 +93,43 @@ const renderedContent = computed(() => {
   return replaceCursorMarker(rendered)
 })
 
+// 使用rAF实现平滑打字效果
+const animateTyping = () => {
+  // 如果还有内容要显示
+  if (targetContent.value.length > displayText.value.length) {
+    // 计算合适的增量大小，根据速度调整
+    const baseSpeed = props.speed || 1
+    const chunkSize = Math.max(1, Math.ceil(baseSpeed / 4))
+
+    // 计算下一个位置
+    const nextPos = Math.min(displayText.value.length + chunkSize, targetContent.value.length)
+
+    // 更新显示的文本
+    displayText.value = targetContent.value.substring(0, nextPos)
+
+    // 如果还没显示完，继续动画
+    if (displayText.value.length < targetContent.value.length) {
+      animationId.value = requestAnimationFrame(animateTyping)
+    } else {
+      // 如果不是流式响应，标记为完成
+      if (!props.isStreaming) {
+        isComplete.value = true
+      }
+    }
+  } else {
+    // 内容已经全部显示
+    if (!props.isStreaming) {
+      isComplete.value = true
+    }
+  }
+}
+
 // 更新显示文本
-const updateDisplayText = async () => {
+const updateDisplayText = () => {
   if (!props.content) return
+
+  // 保存目标内容
+  targetContent.value = props.content
 
   // 如果不是流式响应，直接显示全部内容
   if (!props.isStreaming) {
@@ -101,9 +138,10 @@ const updateDisplayText = async () => {
     return
   }
 
-  // 流式响应，显示内容，保持未完成状态
-  displayText.value = props.content
-  isComplete.value = false
+  // 对于流式响应，如果动画未开始或已结束，启动新动画
+  if (animationId.value === null) {
+    animationId.value = requestAnimationFrame(animateTyping)
+  }
 }
 
 // 监听内容变化
@@ -111,8 +149,37 @@ watch(
   () => props.content,
   (newContent) => {
     if (!newContent) return
-    displayText.value = newContent
-    isComplete.value = !props.isStreaming
+
+    // 对于非流式内容直接更新
+    if (!props.isStreaming) {
+      displayText.value = newContent
+      isComplete.value = true
+      return
+    }
+
+    // 流式内容：更新目标，确保动画在运行
+    targetContent.value = newContent
+    if (animationId.value === null) {
+      animationId.value = requestAnimationFrame(animateTyping)
+    }
+  },
+  { immediate: true }
+)
+
+// 监听流式状态变化
+watch(
+  () => props.isStreaming,
+  (isStreaming) => {
+    // 如果从流式变为非流式，立即显示完整内容
+    if (!isStreaming && props.content) {
+      // 取消动画
+      if (animationId.value !== null) {
+        cancelAnimationFrame(animationId.value)
+        animationId.value = null
+      }
+      displayText.value = props.content
+      isComplete.value = true
+    }
   }
 )
 
@@ -120,6 +187,14 @@ watch(
 onMounted(() => {
   if (props.content) {
     updateDisplayText()
+  }
+})
+
+// 组件卸载前清理动画
+onBeforeUnmount(() => {
+  if (animationId.value !== null) {
+    cancelAnimationFrame(animationId.value)
+    animationId.value = null
   }
 })
 </script>

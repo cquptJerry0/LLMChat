@@ -1,10 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted } from 'vue'
 import { useConversationControlChild } from '@/composables/useConversationControl'
-import { useStreamControlChild } from '@/composables/useStreamControl_'
-import { useNormalizedChatStore } from '@/stores/normalizedChat'
-import type { UpdateCallback } from '@/types/api'
-import { chatService } from '@/services/chat/chatService'
+import { useStreamControlChild } from '@/composables/useStreamControl'
 import UserBubble from './UserBubble.vue'
 import AssistantBubble from './AssistantBubble.vue'
 
@@ -103,47 +100,7 @@ const handlePause = () => {
 // 恢复生成
 const handleResume = async () => {
   if (messageStreamState.value.isPaused) {
-    // 确保设置当前消息ID
-    streamControl.setMessageId(props.message.id)
-
-    // 使用简单恢复方法，不重新创建请求
-    const success = streamControl.simpleResumeStream()
-
-    if (!success) {
-      console.warn('简单恢复失败，尝试完整恢复流程')
-      try {
-        // 创建回调函数
-        const updateCallback: UpdateCallback = (
-          content,
-          reasoning_content,
-          completion_tokens,
-          speed
-        ) => {
-          // 使用 updateStream 更新内容
-          streamControl.updateStream(
-            content,
-            reasoning_content,
-            completion_tokens,
-            speed
-          )
-        }
-
-        // 使用 chatService 恢复生成
-        const chatStore = useNormalizedChatStore()
-        const message = chatStore.messages.get(props.message.id)
-        if (message?.parentId) {
-          const messageHistory = chatStore.getMessageHistory(message.parentId)
-          await chatService.resumeChatCompletion(
-            messageHistory,
-            props.message.id,
-            updateCallback
-          )
-        }
-      } catch (error) {
-        console.error('恢复生成失败:', error)
-        streamControl.setStreamError('恢复生成失败')
-      }
-    }
+      streamControl.resumeStream()
   }
 }
 </script>

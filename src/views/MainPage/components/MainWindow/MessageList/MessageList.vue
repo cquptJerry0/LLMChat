@@ -2,7 +2,7 @@
 import { computed, ref, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { useConversationControlChild } from '@/composables/useConversationControl'
 import MessageBubble from './components/MessageBubble.vue'
-import { useStreamControl } from '@/composables/useStreamControl_'
+import { useStreamControl } from '@/composables/useStreamControl'
 
 // Props定义
 defineProps<{
@@ -102,15 +102,23 @@ const updateVisibleMessages = () => {
 
 // 初始化可见消息
 const initVisibleMessages = () => {
+  const innerInitVisibleMessages = () => {
   if (historicalMessages.value.length <= BATCH_SIZE * 2) {
     startIndex.value = 0
     endIndex.value = historicalMessages.value.length
   } else {
     startIndex.value = Math.max(0, historicalMessages.value.length - BATCH_SIZE)
     endIndex.value = historicalMessages.value.length
+    }
+
+    updateVisibleMessages()
   }
 
-  updateVisibleMessages()
+  if ('requestIdleCallback' in window) {
+    requestIdleCallback(innerInitVisibleMessages, { timeout: 500 })
+  } else {
+    innerInitVisibleMessages()
+  }
 }
 
 // 创建交叉观察器
@@ -219,11 +227,6 @@ onUnmounted(() => {
     bottomObserver.disconnect()
   }
 })
-
-// 检查消息是否是最新的
-const isLatestAssistantMessage = (messageId: string) => {
-  return messageId === conversationState.value.lastAssistantMessageId
-}
 </script>
 
 <template>

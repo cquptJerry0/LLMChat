@@ -2,7 +2,7 @@ import { ref, computed, onMounted, onUnmounted, inject, provide } from 'vue'
 import { useNormalizedChatStore } from '@/stores/normalizedChat'
 import { useStreamStore } from '@/stores/stream'
 import { chatService } from '@/services/chat/chatService'
-import { useStreamControl } from './useStreamControl'
+import { useStreamControl } from '@/composables/useStreamControl'
 import type { Message } from '@/types/chat'
 import type { ChatMessage, UpdateCallback } from '@/types/api'
 import type {
@@ -176,7 +176,7 @@ export function useConversationControl(
       lastAssistantMessageId.value = result.messageId
 
       const streamControl = useStreamControl(result.messageId)
-      if (streamControl.state.value.isIncomplete) {
+      if (streamControl.state.value.isCompleted) {
         isGenerating.value = true
       }
 
