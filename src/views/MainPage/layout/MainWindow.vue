@@ -100,38 +100,17 @@ const handleGlobalKeydown = (event: KeyboardEvent) => {
     // Ctrl+K，新建会话
     event.preventDefault()
     conversationActions.create('新的对话')
-      }
-    }
+  }
+}
 
 // 滚动控制相关
 const messageListWrapper = ref<HTMLElement | null>(null)
 const isAutoScrollEnabled = ref(true)
 const hasNewMessage = ref(false)
-const isUserScrolling = ref(false)
 const lastSeenMessageId = ref('') // 记录最后看到的消息ID
 const showScrollToBottom = ref(false) // 控制滚动到底部按钮显示
-
-// 处理滚动事件
-function handleScroll() {
-  if (!messageListWrapper.value) return
-
-  const { scrollHeight, clientHeight, scrollTop } = messageListWrapper.value
-  const isAtBottom = Math.abs(scrollHeight - clientHeight - scrollTop) < 50
-
-  // 显示/隐藏滚动到底部按钮 (不在底部时显示)
-  showScrollToBottom.value = !isAtBottom
-
-  isAutoScrollEnabled.value = isAtBottom
-  isUserScrolling.value = !isAtBottom
-
-  // 如果滚动到底部,更新最后看到的消息ID
-  if (isAtBottom && state.value.currentMessages?.length > 0) {
-    const lastMessage = state.value.currentMessages[state.value.currentMessages.length - 1]
-    if (lastMessage) {
-      lastSeenMessageId.value = lastMessage.id
-    }
-  }
-}
+const currentStreamingMessageId = ref('') // 记录当前正在流式输出的消息ID
+const userScrolledDuringCurrentMessage = ref(false) // 标记用户是否在当前消息生成时手动滚动了
 
 // 检查是否有新消息
 const checkNewMessages = () => {
@@ -160,29 +139,62 @@ const checkNewMessages = () => {
 
 // 滚动到底部
 const scrollToBottom = (force = false) => {
-  if (!messageListWrapper.value || (!isAutoScrollEnabled.value && !force)) return
+  if (!messageListWrapper.value) return
 
-  nextTick(() => {
-    if (messageListWrapper.value) {
-      messageListWrapper.value.scrollTop = messageListWrapper.value.scrollHeight
+  // 如果是强制滚动或自动滚动启用且用户没有在当前消息生成时手动滚动
+  if (force || (isAutoScrollEnabled.value && !userScrolledDuringCurrentMessage.value)) {
+    nextTick(() => {
+      if (messageListWrapper.value) {
+        messageListWrapper.value.scrollTop = messageListWrapper.value.scrollHeight
 
-      // 更新最后看到的消息ID
-      if (state.value.currentMessages?.length > 0) {
-        const lastMessage = state.value.currentMessages[state.value.currentMessages.length - 1]
-        if (lastMessage) {
-          lastSeenMessageId.value = lastMessage.id
+        // 更新最后看到的消息ID
+        if (state.value.currentMessages?.length > 0) {
+          const lastMessage = state.value.currentMessages[state.value.currentMessages.length - 1]
+          if (lastMessage) {
+            lastSeenMessageId.value = lastMessage.id
+          }
         }
-      }
 
-      hasNewMessage.value = false
+        hasNewMessage.value = false
+      }
+    })
+  } else {
+    // 如果用户手动滚动过，显示新消息提示
+    if (!force && streamControl.state.value.isStreaming) {
+      hasNewMessage.value = true
     }
-  })
+  }
+}
+
+// 监听滚动事件
+const handleScroll = () => {
+  if (!messageListWrapper.value) return
+
+  const scrollTop = messageListWrapper.value.scrollTop
+  const scrollHeight = messageListWrapper.value.scrollHeight
+  const clientHeight = messageListWrapper.value.clientHeight
+
+  // 检测是否滚动到底部
+  const isAtBottom = scrollTop + clientHeight >= scrollHeight - 50 // 50px的容差
+  isAutoScrollEnabled.value = isAtBottom
+
+  // 如果不在底部，显示滚动到底部按钮
+  showScrollToBottom.value = !isAtBottom
+
+  // 如果正在生成消息且用户手动滚动（且不是在底部）
+  if (streamControl.state.value.isStreaming &&
+      streamControl.state.value.messageId === currentStreamingMessageId.value &&
+      !isAtBottom) {
+    userScrolledDuringCurrentMessage.value = true
+  }
 }
 
 // 点击新消息提示
 const handleNewMessageClick = () => {
   scrollToBottom(true)
   hasNewMessage.value = false
+  // 重置用户滚动标记，让系统恢复自动滚动
+  userScrolledDuringCurrentMessage.value = false
 }
 
 // 初始化最后看到的消息ID和记录组件生命周期
@@ -192,6 +204,11 @@ onMounted(() => {
 
   // 添加全局键盘事件
   document.addEventListener('keydown', handleGlobalKeydown, true)
+
+  // 添加滚动事件监听
+  if (messageListWrapper.value) {
+    messageListWrapper.value.addEventListener('scroll', handleScroll, { passive: true })
+  }
 
   // 初始化最后看到的消息ID
   if (state.value.currentMessages?.length > 0) {
@@ -207,14 +224,37 @@ onUnmounted(() => {
 
   // 移除全局键盘事件
   document.removeEventListener('keydown', handleGlobalKeydown, true)
+
+  // 移除滚动事件监听
+  if (messageListWrapper.value) {
+    messageListWrapper.value.removeEventListener('scroll', handleScroll)
+  }
 })
 
 // 监听消息变化和流状态变化
 watch(
   [() => state.value.currentMessages, () => streamControl.state.value],
-  () => {
-    if (state.value.isGenerating || isAutoScrollEnabled.value) {
-      scrollToBottom()
+  ([messages, streamState], [oldMessages, oldStreamState]) => {
+    // 检测是否有新消息开始生成
+    if (streamState.isStreaming &&
+        (!oldStreamState?.isStreaming || streamState.messageId !== oldStreamState?.messageId)) {
+      // 新消息开始生成，重置用户滚动标记
+      userScrolledDuringCurrentMessage.value = false
+      currentStreamingMessageId.value = streamState.messageId || ''
+    }
+
+    // 检测消息是否生成完毕
+    if (oldStreamState?.isStreaming && !streamState.isStreaming) {
+      // 消息生成完毕，重置用户滚动标记，为下一条消息准备
+      userScrolledDuringCurrentMessage.value = false
+      currentStreamingMessageId.value = ''
+    }
+
+    // 处理滚动
+    if (state.value.isGenerating) {
+      scrollToBottom() // 根据用户滚动状态决定是否自动滚动
+    } else if (isAutoScrollEnabled.value) {
+      scrollToBottom() // 用户在底部，自动滚动
     } else {
       // 检查是否有新消息
       hasNewMessage.value = checkNewMessages()
@@ -366,23 +406,23 @@ defineEmits(['toggle-sidebar'])
 }
 
 // 添加滚动到底部按钮样式
-  .scroll-to-bottom-btn {
-    position: absolute;
-    top: -45%;
-    right: 35%;
-    transform: translateX(55%);
-    width: 50px;
-    height: 50px;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-    transition: all 0.3s ease;
-    z-index: 10;
-    box-shadow: 3px 4px 8px rgba(0, 0, 0, 0.15);
-    &:hover {
-        background: rgba(0, 0, 0, 0.1);
-    }
+.scroll-to-bottom-btn {
+  position: absolute;
+  top: -45%;
+  right: 35%;
+  transform: translateX(55%);
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  z-index: 10;
+  box-shadow: 3px 4px 8px rgba(0, 0, 0, 0.15);
+  &:hover {
+    background: rgba(0, 0, 0, 0.1);
+  }
 }
 </style>

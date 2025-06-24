@@ -1,6 +1,8 @@
 <script setup lang="ts">
-import { ref, watch, onMounted, nextTick, computed, onBeforeUnmount } from 'vue'
+import { ref, watch, onMounted, nextTick, computed, onUnmounted } from 'vue'
 import { md } from '@/utils/markdown'
+import { sanitizeHtml } from '@/utils/markdown/domPurify'
+import { initializeAllCodeBlocks, createCodeBlockObserver } from '@/utils/markdown/codeBlock'
 
 // 定义 props
 const props = defineProps<{
@@ -15,9 +17,14 @@ const displayText = ref('')
 const isComplete = ref(false)
 // 光标类型
 const CURSOR_HTML = '<span class="typewriter-cursor"></span>'
-// 动画控制
-const animationId = ref<number | null>(null)
-const targetContent = ref('')
+// 上次渲染的内容长度 - 用于判断何时触发优化
+// 使用普通变量，而不是ref，避免响应式更新
+let lastRenderedLength = 0
+
+// 内容容器引用，用于代码块初始化
+const contentRef = ref<HTMLElement | null>(null)
+// 代码块观察器
+let codeBlockObserver: MutationObserver | null = null
 
 // 处理Markdown内容，在适当位置插入光标
 const processMarkdown = (text: string): string => {
@@ -82,44 +89,56 @@ const renderedContent = computed(() => {
 
   // 如果不是流式响应或已完成，直接渲染
   if (!props.isStreaming || isComplete.value) {
-    return md.render(displayText.value)
+    const rendered = md.render(displayText.value)
+    // 使用DOMPurify净化输出
+    return sanitizeHtml(rendered)
   }
 
   // 处理Markdown内容并渲染
   const processed = processMarkdown(displayText.value)
   const rendered = md.render(processed)
 
-  // 替换特殊标记为光标
-  return replaceCursorMarker(rendered)
+  // 替换特殊标记为光标并净化
+  return sanitizeHtml(replaceCursorMarker(rendered))
 })
 
-// 使用rAF实现平滑打字效果
-const animateTyping = () => {
-  // 如果还有内容要显示
-  if (targetContent.value.length > displayText.value.length) {
-    // 计算合适的增量大小，根据速度调整
-    const baseSpeed = props.speed || 1
-    const chunkSize = Math.max(1, Math.ceil(baseSpeed / 4))
+// 使用rIC优化大型内容的后续渲染
+const optimizeMarkdownRendering = (content: string) => {
+  if (!content || content.length < 1000) return
 
-    // 计算下一个位置
-    const nextPos = Math.min(displayText.value.length + chunkSize, targetContent.value.length)
+  // 内容长度显著增加时，才进行优化
+  if (content.length - lastRenderedLength < 500) return
 
-    // 更新显示的文本
-    displayText.value = targetContent.value.substring(0, nextPos)
+  lastRenderedLength = content.length
 
-    // 如果还没显示完，继续动画
-    if (displayText.value.length < targetContent.value.length) {
-      animationId.value = requestAnimationFrame(animateTyping)
-    } else {
-      // 如果不是流式响应，标记为完成
-      if (!props.isStreaming) {
-        isComplete.value = true
-      }
-    }
-  } else {
-    // 内容已经全部显示
-    if (!props.isStreaming) {
-      isComplete.value = true
+  // 使用requestIdleCallback
+  if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
+    try {
+      const idleCallback = window.requestIdleCallback ||
+        ((cb: IdleRequestCallback) => setTimeout(cb, 1));
+
+      idleCallback(
+        () => {
+          try {
+            // 预渲染markdown，将结果缓存在内部
+            // 包装在try-catch中，避免任何错误影响主流程
+            md.render(content)
+
+            // 对代码块进行预渲染
+            if (content.includes('```')) {
+              const codeBlocks = content.match(/```[\s\S]*?```/g) || []
+              for (let i = 0; i < Math.min(codeBlocks.length, 5); i++) {
+                md.render(codeBlocks[i])
+              }
+            }
+          } catch (err) {
+            console.error('Markdown optimization error:', err)
+          }
+        },
+        { timeout: 1000 }
+      )
+    } catch (err) {
+      console.error('Failed to schedule optimization:', err)
     }
   }
 }
@@ -128,20 +147,35 @@ const animateTyping = () => {
 const updateDisplayText = () => {
   if (!props.content) return
 
-  // 保存目标内容
-  targetContent.value = props.content
+  // 直接显示内容，保持同步
+  displayText.value = props.content
 
-  // 如果不是流式响应，直接显示全部内容
-  if (!props.isStreaming) {
-    displayText.value = props.content
-    isComplete.value = true
-    return
-  }
+  // 设置状态
+  isComplete.value = !props.isStreaming
 
-  // 对于流式响应，如果动画未开始或已结束，启动新动画
-  if (animationId.value === null) {
-    animationId.value = requestAnimationFrame(animateTyping)
-  }
+  // 将优化放到微任务队列中，避免与Vue渲染循环直接交互
+  Promise.resolve().then(() => {
+    optimizeMarkdownRendering(props.content)
+  })
+}
+
+// 初始化代码块交互功能
+const initializeCodeBlocks = () => {
+  // 确保DOM已更新
+  nextTick(() => {
+    if (contentRef.value) {
+      // 初始化所有现有代码块
+      initializeAllCodeBlocks(contentRef.value)
+
+      // 如果观察器已存在，先断开连接
+      if (codeBlockObserver) {
+        codeBlockObserver.disconnect()
+      }
+
+      // 创建新的观察器监视后续添加的代码块
+      codeBlockObserver = createCodeBlockObserver(contentRef.value)
+    }
+  })
 }
 
 // 监听内容变化
@@ -150,18 +184,17 @@ watch(
   (newContent) => {
     if (!newContent) return
 
-    // 对于非流式内容直接更新
-    if (!props.isStreaming) {
-      displayText.value = newContent
-      isComplete.value = true
-      return
-    }
+    // 同步更新显示内容
+    displayText.value = newContent
+    isComplete.value = !props.isStreaming
 
-    // 流式内容：更新目标，确保动画在运行
-    targetContent.value = newContent
-    if (animationId.value === null) {
-      animationId.value = requestAnimationFrame(animateTyping)
-    }
+    // 将优化延迟到下一个事件循环，避免干扰响应式更新
+    setTimeout(() => {
+      optimizeMarkdownRendering(newContent)
+    }, 0)
+
+    // 内容变化后初始化代码块
+    initializeCodeBlocks()
   },
   { immediate: true }
 )
@@ -170,16 +203,23 @@ watch(
 watch(
   () => props.isStreaming,
   (isStreaming) => {
-    // 如果从流式变为非流式，立即显示完整内容
-    if (!isStreaming && props.content) {
-      // 取消动画
-      if (animationId.value !== null) {
-        cancelAnimationFrame(animationId.value)
-        animationId.value = null
-      }
-      displayText.value = props.content
+    // 如果从流式变为非流式，更新完成状态
+    if (!isStreaming) {
       isComplete.value = true
+      // 流式结束后确保代码块功能正常
+      initializeCodeBlocks()
     }
+  }
+)
+
+// 监听渲染内容变化，初始化新的代码块
+watch(
+  renderedContent,
+  () => {
+    // 等待DOM更新
+    nextTick(() => {
+      initializeCodeBlocks()
+    })
   }
 )
 
@@ -187,21 +227,22 @@ watch(
 onMounted(() => {
   if (props.content) {
     updateDisplayText()
+    initializeCodeBlocks()
   }
 })
 
-// 组件卸载前清理动画
-onBeforeUnmount(() => {
-  if (animationId.value !== null) {
-    cancelAnimationFrame(animationId.value)
-    animationId.value = null
+// 组件卸载时清理
+onUnmounted(() => {
+  if (codeBlockObserver) {
+    codeBlockObserver.disconnect()
+    codeBlockObserver = null
   }
 })
 </script>
 
 <template>
   <div class="typewriter">
-    <div class="typewriter__content">
+    <div class="typewriter__content" ref="contentRef">
       <div class="markdown-content" v-html="renderedContent"></div>
     </div>
   </div>
@@ -295,4 +336,5 @@ onBeforeUnmount(() => {
     opacity: 0.3;
   }
 }
+
 </style>

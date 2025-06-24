@@ -29,11 +29,38 @@ const conversations = computed(() => {
     })
 })
 
+// 用于防止重复快速切换的标志
+const switchInProgress = ref(false)
+const lastSwitchTime = ref(0)
+const SWITCH_COOLDOWN = 500 // 毫秒
+
 // 切换会话
 const switchConversation = (id: string) => {
+  const now = Date.now()
+
+  // 如果正在切换或在冷却时间内，忽略点击
+  if (switchInProgress.value || now - lastSwitchTime.value < SWITCH_COOLDOWN) {
+    return
+  }
+
+  // 如果点击的是当前对话，忽略
+  if (id === chatStore.currentConversationId) {
+    return
+  }
+
+  // 设置标志并记录时间
+  switchInProgress.value = true
+  lastSwitchTime.value = now
+
+  // 执行路由切换
   router.push({
     name: 'conversation',
     params: { conversationId: id }
+  }).finally(() => {
+    // 延迟重置标志，避免过快触发
+    setTimeout(() => {
+      switchInProgress.value = false
+    }, SWITCH_COOLDOWN)
   })
 }
 

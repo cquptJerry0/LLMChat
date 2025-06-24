@@ -31,7 +31,7 @@ const allMessages = computed(() => {
 })
 
 // 虚拟列表相关配置
-const BATCH_SIZE = 10 // 一次加载的消息数量
+const BATCH_SIZE = 4 // 一次加载的消息数量
 const visibleMessages = ref<any[]>([]) // 历史可见的消息
 const startIndex = ref(0) // 起始索引
 const endIndex = ref(0) // 结束索引
@@ -100,25 +100,17 @@ const updateVisibleMessages = () => {
               '流式状态:', isMessageStreaming.value)
 }
 
-// 初始化可见消息
+
 const initVisibleMessages = () => {
-  const innerInitVisibleMessages = () => {
   if (historicalMessages.value.length <= BATCH_SIZE * 2) {
     startIndex.value = 0
     endIndex.value = historicalMessages.value.length
   } else {
     startIndex.value = Math.max(0, historicalMessages.value.length - BATCH_SIZE)
     endIndex.value = historicalMessages.value.length
-    }
-
-    updateVisibleMessages()
   }
 
-  if ('requestIdleCallback' in window) {
-    requestIdleCallback(innerInitVisibleMessages, { timeout: 500 })
-  } else {
-    innerInitVisibleMessages()
-  }
+  updateVisibleMessages()
 }
 
 // 创建交叉观察器

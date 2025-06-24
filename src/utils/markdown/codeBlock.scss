@@ -1,0 +1,188 @@
+/* 代码块样式 */
+.code-block {
+  margin: 1em 0;
+  border-radius: 8px;
+  overflow: hidden;
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  
+  /* 顶部栏样式 */
+  .code-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 15px;
+    background: #f1f1f1;
+    color: #333;
+    font-size: 0.9em;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+  }
+  
+  /* 代码语言标识 */
+  .code-lang {
+    font-weight: 600;
+    font-family: monospace;
+    text-transform: uppercase;
+    font-size: 0.8em;
+    letter-spacing: 0.05em;
+  }
+  
+  /* 代码块按钮容器 */
+  .chat-message__code-actions {
+    display: flex;
+    gap: 8px;
+  }
+  
+  /* 代码块按钮 */
+  .chat-message__copy-button {
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    padding: 4px 6px;
+    border-radius: 4px;
+    opacity: 0.7;
+    transition: all 0.2s ease;
+    
+    &:hover {
+      opacity: 1;
+      background: rgba(0, 0, 0, 0.1);
+    }
+    
+    &:active {
+      transform: scale(0.95);
+    }
+    
+    /* 复制成功状态 */
+    &[data-copied="true"] {
+      background: rgba(0, 120, 0, 0.1);
+      
+      img {
+        filter: invert(35%) sepia(98%) saturate(1966%) hue-rotate(122deg) brightness(96%) contrast(106%);
+      }
+    }
+    
+    img {
+      width: 16px;
+      height: 16px;
+      vertical-align: middle;
+    }
+  }
+  
+  /* 代码预格式化区域 */
+  pre.hljs {
+    margin: 0;
+    padding: 15px;
+    overflow-x: auto;
+    font-size: 0.9em;
+    line-height: 1.5;
+    background: #f8f8f8;
+    transition: background-color 0.3s ease;
+    
+    code {
+      font-family: 'Fira Code', Consolas, Monaco, 'Andale Mono', 'Ubuntu Mono', monospace;
+    }
+  }
+  
+  /* 亮色主题 */
+  &.light-theme {
+    border: 1px solid rgba(0, 0, 0, 0.1);
+    
+    .code-header {
+      background: #f1f1f1;
+      color: #333;
+    }
+    
+    pre.hljs {
+      background: #f8f8f8;
+      color: #333;
+    }
+  }
+  
+  /* 暗色主题 */
+  &.dark-theme {
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    
+    .code-header {
+      background: #2d2d2d;
+      color: #e0e0e0;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    }
+    
+    pre.hljs {
+      background: #1e1e1e;
+      color: #e0e0e0;
+    }
+    
+    .chat-message__copy-button {
+      &:hover {
+        background: rgba(255, 255, 255, 0.1);
+      }
+      
+      &[data-copied="true"] {
+        background: rgba(0, 180, 0, 0.15);
+      }
+      
+      img {
+        filter: invert(95%);
+      }
+    }
+  }
+}
+
+/* 工具提示样式 */
+[data-tooltip] {
+  position: relative;
+  
+  &:hover::after  {
+    content: attr(data-tooltip);
+    position: absolute;
+    top: 150%;
+    right: 0;
+    background: rgba(0, 0, 0, 0.8);
+    color: white;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    white-space: nowrap;
+    z-index: 10;
+    pointer-events: none;
+    transform: translateY(-5px);
+    animation: fade-in 0.2s ease-out;
+  }
+}
+
+/* 动画 */
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(0);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(-5px);
+  }
+}
+
+/* 适配系统暗色模式 */
+@media (prefers-color-scheme: dark) {
+  .code-block {
+    &:not(.light-theme):not(.dark-theme) {
+      border-color: rgba(255, 255, 255, 0.1);
+      
+      .code-header {
+        background: #2d2d2d;
+        color: #e0e0e0;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+      }
+      
+      pre.hljs {
+        background: #1e1e1e;
+        color: #e0e0e0;
+      }
+      
+      .chat-message__copy-button img {
+        filter: invert(95%);
+      }
+    }
+  }
+} 
