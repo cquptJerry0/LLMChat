@@ -33,12 +33,17 @@ export function useStreamControl(initialMessageId?: string) {
         isPaused: false,
         isError: false,
         isCompleted: true,
-        error: null
+        error: null,
+        isContentComplete: false
       }
     }
 
     const streamState = streamStore.getStreamState(messageId.value)
     const message = chatStore.messages.get(messageId.value)
+
+    // 如果流状态为完成，但之前是内容完成状态，需要保留isContentComplete标志
+    const isContentComplete = streamState?.isContentComplete ||
+      streamState?.status === StreamStatus.COMPLETED;
 
     return {
       messageId: messageId.value,
@@ -49,10 +54,12 @@ export function useStreamControl(initialMessageId?: string) {
       speed: message?.speed || 0,
       error: streamState?.error || null,
       isStreaming: streamState?.status === StreamStatus.STREAMING,
-      isPaused: streamState?.status === StreamStatus.PAUSED,
+      isPaused: streamState?.status === StreamStatus.PAUSED || !!streamState?.isPaused,
       isError: streamState?.status === StreamStatus.ERROR,
       isCompleted: !streamState || streamState.status === StreamStatus.COMPLETED,
-      pausedAt: streamState?.pausedAt
+      pausedAt: streamState?.pausedAt,
+      // 重要：即使流状态变为完成，也保留内容完成标志
+      isContentComplete
     }
   })
 
@@ -107,16 +114,41 @@ export function useStreamControl(initialMessageId?: string) {
   }
 
   /**
-   * 简单恢复流状态
-   * 不重新创建请求，只将状态从暂停改为流式
-   * 用于用户手动暂停后的恢复
+   * 恢复流
    */
   function resumeStream() {
     if (!messageId.value) return false
 
-    // 使用store中的resumeStream方法
-    const result = streamStore.resumeStream(messageId.value)
+    // 获取流状态
+    const stream = streamStore.getStreamState(messageId.value)
 
+    // 如果流不存在或不是暂停状态，直接返回
+    if (!stream || stream.status !== StreamStatus.PAUSED) {
+      return false
+    }
+
+    // 如果内容已全部接收，直接显示完整内容
+    if (stream.isContentComplete) {
+      console.log('[StreamControl] 内容已全部接收，直接显示完整内容')
+
+      // 获取消息对象
+      const message = chatStore.messages.get(messageId.value)
+      if (message) {
+        // 直接更新消息内容
+        message.content = stream.accumulatedContent
+        if (stream.accumulatedReasoning) {
+          message.reasoning_content = stream.accumulatedReasoning
+        }
+      }
+
+      // 标记流为完成状态
+      streamStore.completeStream(messageId.value)
+      return true
+    }
+
+    // 正常恢复流程 - 使用store中的resumeStream方法
+    console.log('[StreamControl] 恢复流', messageId.value)
+    const result = streamStore.resumeStream(messageId.value)
     return !!result
   }
 

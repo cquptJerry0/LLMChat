@@ -1,9 +1,14 @@
 import { apiClient } from '../base/apiClient'
 import { useSettingStore } from '@/stores/setting'
 import { useStreamStore } from '@/stores/stream'
-import { ApiError, BusinessError, BusinessErrorCode, createBusinessError } from '../base/errorHandler'
+import {
+  BusinessErrorCode,
+  createBusinessError,
+  handleError,
+  ResponseParseError
+} from '../base/errorHandler'
 import { calculateSpeed } from '@/utils/speed'
-import { responseHandler, ResponseParseError, IResponseHandler } from './responseHandler'
+import { responseHandler, IResponseHandler } from './responseHandler'
 import type { ResumeInfo } from '@/types/stream'
 import type {
   ChatMessage,
@@ -13,17 +18,6 @@ import type {
   StreamHandlerOptions,
   UpdateCallback
 } from '@/types/api'
-
-/**
- * 错误类型枚举
- */
-export enum ErrorType {
-  NETWORK = 'network',   // 网络层错误
-  BUSINESS = 'business', // 业务层错误
-  PARSING = 'parsing',   // 解析层错误
-  USER_ABORT = 'abort',  // 用户中断
-  UNKNOWN = 'unknown'    // 未知错误
-}
 
 /**
  * 聊天服务接口
@@ -43,15 +37,6 @@ export interface IChatService {
   ): Promise<ExtendedChatCompletionResponse | any>;
 
   /**
-   * 恢复之前中断的聊天完成请求
-   */
-  resumeChatCompletion(
-    messages: ChatMessage[],
-    messageId: string,
-    updateCallback: UpdateCallback
-  ): Promise<any>;
-
-  /**
    * 取消请求
    */
   cancelRequest(messageId: string): boolean;
@@ -67,7 +52,7 @@ export interface ChatServiceDependencies {
 }
 
 /**
- * 聊天服务实现, implements表示实现接口
+ * 聊天服务实现
  */
 class ChatService implements IChatService {
   private abortControllers: Map<string, AbortController> = new Map();
@@ -225,7 +210,7 @@ class ChatService implements IChatService {
           this.handleStreamResponse(streamResponse, updateCallback, streamOptions, messageId)
             .catch(error => {
               console.error('处理流式响应出错:', error);
-              this.handleBusinessError(error, messageId);
+              this.handleError(error, messageId);
             });
         }
 
@@ -254,47 +239,9 @@ class ChatService implements IChatService {
 
       return extendedResponse;
     } catch (error) {
-      this.handleBusinessError(error, messageId);
+      this.handleError(error, messageId);
       throw error;
     }
-  }
-
-  /**
-   * 恢复之前中断的聊天完成请求
-   */
-  async resumeChatCompletion(
-    messages: ChatMessage[],
-    messageId: string,
-    updateCallback: UpdateCallback
-  ): Promise<any> {
-    console.log('resumeChatCompletion', { messageId });
-
-    const streamStore = this.getStreamStore();
-    const stream = streamStore.getStreamState(messageId);
-
-    if (!stream) {
-      throw createBusinessError(
-        BusinessErrorCode.INVALID_STATE,
-        '找不到要恢复的流'
-      );
-    }
-
-    // 获取恢复信息
-    const resumeResult = streamStore.resumeStream(messageId);
-    if (!resumeResult) {
-      throw createBusinessError(
-        BusinessErrorCode.INVALID_STATE,
-        '无法恢复流'
-      );
-    }
-
-    // 使用恢复信息创建新请求
-    return this.createChatCompletion(messages, {
-      messageId,
-      signal: resumeResult.signal,
-      updateCallback,
-      resumeInfo: resumeResult.resumeInfo
-    });
   }
 
   /**
@@ -338,99 +285,38 @@ class ChatService implements IChatService {
       });
     } catch (error) {
       // 处理响应解析错误
-      this.handleBusinessError(error, messageId);
+      this.handleError(error, messageId);
     }
   }
 
   /**
-   * 处理错误
+   * 简化的错误处理
    */
-  private handleBusinessError(error: unknown, messageId?: string): void {
+  private handleError(error: unknown, messageId?: string): void {
     if (!messageId) return;
 
     const streamStore = this.getStreamStore();
     let errorMessage: string;
-    let errorType: ErrorType = ErrorType.UNKNOWN;
 
-    // 解析错误 (Parsing Layer)
+    // 简化的错误分类
     if (error instanceof ResponseParseError) {
-      errorType = ErrorType.PARSING;
       errorMessage = `解析错误: ${error.message}`;
-      console.error(`[${errorType}] Response parse error:`, error);
-    }
-    // 业务逻辑错误 (Business Layer)
-    else if (error instanceof BusinessError) {
-      errorType = ErrorType.BUSINESS;
+    } else if (error instanceof Error) {
       errorMessage = error.message;
-      console.error(`[${errorType}] Business error (${error.code}):`, error);
-    }
-    // API/网络错误 (Network Layer)
-    else if (error instanceof ApiError) {
-      errorType = ErrorType.NETWORK;
-      errorMessage = error.message;
-      console.error(`[${errorType}] API error (${error.status}):`, error);
-    }
-    // 用户中断
-    else if (error instanceof DOMException && error.name === 'AbortError') {
-      errorType = ErrorType.USER_ABORT;
-      const state = streamStore.streams.get(`stream_${messageId}`);
-      if (state?.status === 'streaming') {
-        errorMessage = '请求被中断';
-      } else {
-        // 如果已经是暂停状态，不视为错误
-        return;
-      }
-    }
-    // 未知错误
-    else {
-      errorType = ErrorType.UNKNOWN;
-      errorMessage = error instanceof Error ? error.message : '未知错误';
-      console.error(`[${errorType}] Unknown error in chat service:`, error);
+    } else {
+      errorMessage = '未知错误';
     }
 
-    // 记录错误日志
-    this.logError(error, errorType, messageId);
+    console.error('Error in ChatService:', {
+      messageId,
+      message: errorMessage,
+      error
+    });
 
     // 更新流状态
     streamStore.setStreamError(messageId, errorMessage);
   }
-
-  /**
-   * 记录错误日志
-   */
-  private logError(error: Error | BusinessError | ApiError | ResponseParseError | unknown, errorType: ErrorType, messageId: string): void {
-    console.group(`Error in ChatService (${errorType}) - Message ID: ${messageId}`);
-    console.error('Error details:', {
-      type: errorType,
-      errorClass: error instanceof Error ? error.constructor.name : 'Unknown',
-      message: error instanceof Error ? error.message : String(error),
-      timestamp: new Date().toISOString()
-    });
-
-    if (error instanceof Error && error.stack) {
-      console.debug('Stack trace:', error.stack);
-    }
-
-    if (error instanceof BusinessError && error.data) {
-      console.debug('Business error data:', error.data);
-    }
-
-    if (error instanceof ApiError) {
-      console.debug('API error details:', {
-        status: error.status,
-        code: error.code,
-        response: error.response
-      });
-    }
-
-    if (error instanceof ResponseParseError && error.data) {
-      console.debug('Parse error data:', error.data);
-    }
-
-    console.groupEnd();
-  }
 }
-
 
 // 导出单例实例
 export const chatService = new ChatService({

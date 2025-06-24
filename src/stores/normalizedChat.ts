@@ -242,19 +242,32 @@ export const useNormalizedChatStore = defineStore('normalized-chat', () => {
     const message = messages.value.get(messageId)
     if (!message) return false
 
+    console.log(`[NormalizedChat] 更新消息: ${messageId}`, {
+      originalLength: message.content.length,
+      updateLength: updates.content?.length || 0,
+      hasUpdate: !!updates.content
+    })
+
+    // 创建新对象以确保响应式更新
     const updatedMessage = {
       ...message,
       ...updates
     }
 
+    // 强制触发响应式更新
+    messages.value.delete(messageId)
     messages.value.set(messageId, updatedMessage)
     messagesLRU.set(messageId, updatedMessage)
 
-    const conversation = conversations.value.get(message.conversationId)
+    // 更新会话的最后修改时间
+    const conversation = conversations.value.get(updatedMessage.conversationId)
     if (conversation) {
       conversation.lastUpdatedAt = Date.now()
-      conversations.value.set(message.conversationId, conversation)
+      conversations.value.set(updatedMessage.conversationId, { ...conversation })
     }
+
+    // 触发保存
+    saveToStorage()
 
     return true
   }

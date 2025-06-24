@@ -2,7 +2,7 @@ import MarkdownIt from 'markdown-it'
 import './styles.scss'
 import { generateCodeBlockHtml, generateInlineCodeHtml } from './template'
 import { highlightCode, hljs } from './highlight'
-import { sanitizeHtml, sanitizeElement } from './domPurify'
+import { sanitizeHtml } from './domPurify'
 
 // 创建markdown-it实例
 const md = new MarkdownIt({
@@ -27,4 +27,4 @@ md.renderer.rules.code_inline = function (tokens, idx, options, env, self) {
   return generateInlineCodeHtml(code)
 }
 
-export { md, sanitizeHtml, sanitizeElement }
+export { md, sanitizeHtml }

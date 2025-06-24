@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import TypeWriter from './TypeWriter.vue'
 import ChatButton from '@/components/ChatButton.vue'
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 
 const props = defineProps<{
   content: string
@@ -9,6 +9,7 @@ const props = defineProps<{
   isStreaming?: boolean
   isError?: boolean
   isPaused?: boolean
+  isContentComplete?: boolean
   avatar: string
 }>()
 
@@ -28,10 +29,26 @@ const isDisliked = ref(false)
 // 计算消息状态
 const messageStatus = computed(() => {
   if (props.isError) return 'error'
-  if (props.isPaused) return 'paused'
+  if (props.isPaused) {
+    return props.isContentComplete ? 'content-complete' : 'paused'
+  }
   if (props.isStreaming) return 'streaming'
   return 'complete'
 })
+
+// 监听状态变化，帮助调试
+watch(
+  () => ({
+    isStreaming: props.isStreaming,
+    isPaused: props.isPaused,
+    isContentComplete: props.isContentComplete,
+    status: messageStatus.value
+  }),
+  (newState) => {
+    console.log('AssistantBubble状态变化', newState)
+  },
+  { deep: true, immediate: true }
+)
 
 const handleCopy = () => {
   emit('copy')
@@ -95,9 +112,9 @@ const handleResume = () => {
           <!-- 暂停状态提示 -->
           <div v-else-if="isPaused" class="assistant-paused">
             <el-alert
-              title="生成已暂停"
+              :title="isContentComplete ? '内容已全部接收，生成已暂停' : '生成已暂停'"
               type="warning"
-              description="AI 助手生成回复已暂停，点击下方继续生成按钮恢复。"
+              :description="isContentComplete ? 'AI 助手已完成回复，但显示被暂停。点击下方按钮查看完整回复。' : 'AI 助手生成回复已暂停，点击下方继续生成按钮恢复。'"
               show-icon
               :closable="false"
               class="assistant-paused__alert"
@@ -105,13 +122,13 @@ const handleResume = () => {
             <!-- 继续生成按钮 -->
             <div class="assistant-paused__actions">
               <ChatButton
-                icon="play"
-                type="success"
-                tooltip="继续生成 (Ctrl+R)"
+                :icon="isContentComplete ? 'check' : 'play'"
+                :type="isContentComplete ? 'primary' : 'success'"
+                :tooltip="isContentComplete ? '显示完整回复 (Ctrl+R)' : '继续生成 (Ctrl+R)'"
                 iconColor="var(--icon-color-secondary)"
                 @click="handleResume"
               >
-                继续生成
+                {{ isContentComplete ? '显示完整回复' : '继续生成' }}
               </ChatButton>
             </div>
           </div>
@@ -123,6 +140,7 @@ const handleResume = () => {
               :content="reasoningContent"
               :is-streaming="isStreaming"
               :is-paused="isPaused"
+              :is-content-complete="isContentComplete"
             />
           </div>
 
@@ -132,6 +150,7 @@ const handleResume = () => {
             :content="content"
             :is-streaming="isStreaming"
             :is-paused="isPaused"
+            :is-content-complete="isContentComplete"
           />
         </div>
 
@@ -206,8 +225,12 @@ const handleResume = () => {
 
   &--streaming {
     border-bottom: 1px solid #409eff;
-    }
   }
+
+  &--content-complete {
+    border-bottom: 1px dashed #e6a23c;
+  }
+}
 
 .assistant-avatar {
   flex-shrink: 0;

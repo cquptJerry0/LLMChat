@@ -41,7 +41,8 @@ const messageStreamState = computed(() => {
       isPaused: false,
       isError: false,
       isCompleted: true,
-      isIncomplete: false
+      isIncomplete: false,
+      isContentComplete: false
     }
   }
 
@@ -53,9 +54,19 @@ const messageStreamState = computed(() => {
       isPaused: false,
       isError: false,
       isCompleted: true,
-      isIncomplete: false
+      isIncomplete: false,
+      isContentComplete: false
     }
   }
+
+  // 记录状态变化，帮助调试
+  console.log('MessageBubble流状态', {
+    messageId: props.message.id,
+    status: streamState.value.status,
+    isStreaming: streamState.value.isStreaming,
+    isPaused: streamState.value.isPaused,
+    isContentComplete: streamState.value.isContentComplete
+  })
 
   return streamState.value
 })
@@ -100,7 +111,7 @@ const handlePause = () => {
 // 恢复生成
 const handleResume = async () => {
   if (messageStreamState.value.isPaused) {
-      streamControl.resumeStream()
+    streamControl.resumeStream()
   }
 }
 </script>
@@ -118,6 +129,7 @@ const handleResume = async () => {
       :is-streaming="messageStreamState.isStreaming"
       :is-error="messageStreamState.isError"
       :is-paused="messageStreamState.isPaused"
+      :is-content-complete="messageStreamState.isContentComplete"
       :avatar="'https://t8.baidu.com/it/u=4011543194,454374607&fm=193'"
       @copy="handleCopy"
       @retry="handleRetry"

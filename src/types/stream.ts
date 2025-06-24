@@ -7,7 +7,7 @@ export enum StreamStatus {
   STREAMING = 'streaming',
   PAUSED = 'paused',
   COMPLETED = 'completed',
-  ERROR = 'error'
+  ERROR = 'error',
 }
 
 // 持久化的流状态
@@ -21,6 +21,7 @@ export interface PersistedStreamState {
   timestamp: number;
   savedAt: number;
   pausedAt?: number;
+  isContentComplete?: boolean;
 }
 
 // 恢复信息接口
@@ -50,8 +51,9 @@ export interface StreamState {
 
   // 暂停相关字段
   isPaused: boolean;           // 是否处于暂停状态
-  contentBuffer: string;       // 暂停时的内容缓冲区
-  reasoningBuffer: string;     // 暂停时的推理内容缓冲区
+
+  // 新增：标记内容是否已完全接收
+  isContentComplete?: boolean;
 }
 
 // 恢复结果接口
@@ -85,6 +87,9 @@ export interface StreamStateManager {
 
   // 完成流
   completeStream: (messageId: string) => boolean;
+
+  // 标记内容完成
+  markContentComplete: (messageId: string) => boolean;
 
   // 设置流错误
   setStreamError: (messageId: string, error: string) => boolean;

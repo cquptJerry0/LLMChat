@@ -55,8 +55,6 @@ export const useStreamStore = defineStore(
         accumulatedReasoning: '',
         lastCompletionTokens: 0,
         pausedAt: 0,
-        contentBuffer: '',
-        reasoningBuffer: '',
         isPaused: false
       }
 
@@ -86,20 +84,24 @@ export const useStreamStore = defineStore(
         stream.accumulatedReasoning = reasoning_content || ''
         stream.lastCompletionTokens = completion_tokens || 0
 
-        // 如果处于暂停状态，将新内容存入缓冲区，不更新UI
+        // 如果处于暂停状态，不更新UI
         if (stream.isPaused) {
-          stream.contentBuffer = content
-          stream.reasoningBuffer = reasoning_content || ''
+          console.log(`[StreamStore] 暂停状态更新内容: ${messageId}`, {
+            contentLength: content.length,
+            reasoningLength: (reasoning_content || '').length
+          })
 
           // 仍然保存到localStorage以防断网
           persistStreamState(messageId, {
-            content: stream.accumulatedContent, // 保存暂停前的内容
+            content: stream.accumulatedContent,
             reasoning_content: stream.accumulatedReasoning || '',
             completion_tokens: completion_tokens || 0,
             speed: speed || 0,
             status: stream.status,
             timestamp: Date.now(),
-            savedAt: Date.now()
+            savedAt: Date.now(),
+            pausedAt: stream.pausedAt,
+            isContentComplete: stream.isContentComplete
           })
 
           return
@@ -121,7 +123,8 @@ export const useStreamStore = defineStore(
           speed: speed || 0,
           status: stream.status,
           timestamp: Date.now(),
-          savedAt: Date.now()
+          savedAt: Date.now(),
+          isContentComplete: stream.isContentComplete
         })
       }
     }
@@ -198,14 +201,49 @@ export const useStreamStore = defineStore(
       return null
     }
 
+    const markContentComplete = (messageId: string) => {
+      const streamId = `${STORAGE_KEYS.STREAM_ID_PREFIX}${messageId}`
+      const stream = streams.value.get(streamId)
+
+      if (stream) {
+        // 添加内容完成标记，但保持暂停状态
+        stream.isContentComplete = true
+        console.log(`[StreamStore] 标记内容已全部接收: ${messageId}`, stream)
+
+        // 更新localStorage存储
+        persistStreamState(messageId, {
+          content: stream.accumulatedContent,
+          reasoning_content: stream.accumulatedReasoning,
+          completion_tokens: stream.lastCompletionTokens,
+          speed: 0,
+          status: StreamStatus.PAUSED,
+          timestamp: Date.now(),
+          savedAt: Date.now(),
+          pausedAt: stream.pausedAt,
+          isContentComplete: true
+        })
+
+        return true
+      }
+
+      return false
+    }
+
     const completeStream = (messageId: string) => {
       const streamId = `${STORAGE_KEYS.STREAM_ID_PREFIX}${messageId}`
       const stream = streams.value.get(streamId)
 
       if (stream) {
+        // 保留isContentComplete标志
+        const wasContentComplete = stream.isContentComplete || false
+
         stream.status = StreamStatus.COMPLETED
         stream.completeTime = Date.now()
         stream.abortController = undefined
+        stream.isPaused = false
+        // 保留内容完成标志
+        stream.isContentComplete = wasContentComplete || true
+
         streams.value.set(streamId, stream)
 
         // 保存完成状态
@@ -216,7 +254,8 @@ export const useStreamStore = defineStore(
           speed: 0,
           status: StreamStatus.COMPLETED,
           timestamp: Date.now(),
-          savedAt: Date.now()
+          savedAt: Date.now(),
+          isContentComplete: true // 已完成的流内容必然是完整的
         })
 
         setTimeout(() => {
@@ -316,6 +355,7 @@ export const useStreamStore = defineStore(
       updateStream,
       pauseStream,
       resumeStream,
+      markContentComplete,
       completeStream,
       setStreamError,
       getStreamState,

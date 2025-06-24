@@ -1,6 +1,7 @@
 import { XStream, type XStreamOptions } from '@/utils/xstream'
 import { useStreamStore } from '@/stores/stream'
 import { calculateSpeed } from '@/utils/speed'
+import { createParseError } from '../base/errorHandler'
 import type { MessageRole, MessageFile } from '@/types/message'
 import type { ToolCall } from '@/types/api'
 import type {
@@ -11,20 +12,7 @@ import type {
   ExtendedChatCompletionResponse,
   StreamHandlerOptions
 } from '@/types/api'
-
-/**
- * 响应解析错误
- */
-export class ResponseParseError extends Error {
-  constructor(
-    message: string,
-    public readonly originalError?: unknown,
-    public readonly data?: unknown
-  ) {
-    super(message);
-    this.name = 'ResponseParseError';
-  }
-}
+import { StreamStatus } from '@/types/stream'
 
 /**
  * 响应处理器接口
@@ -93,12 +81,12 @@ class ResponseHandler implements IResponseHandler {
 
     if (!response || !response.body) {
       console.error('[ResponseHandler层] 无效的流式响应: 响应体为空')
-      throw new ResponseParseError('无效的流式响应: 响应体为空');
+      throw createParseError('无效的流式响应: 响应体为空');
     }
 
     if (!response.ok) {
       console.error(`[ResponseHandler层] 无效的流式响应: HTTP ${response.status} ${response.statusText}`)
-      throw new ResponseParseError(`无效的流式响应: HTTP ${response.status} ${response.statusText}`);
+      throw createParseError(`无效的流式响应: HTTP ${response.status} ${response.statusText}`);
     }
 
     const contentType = response.headers.get('content-type');
@@ -113,7 +101,7 @@ class ResponseHandler implements IResponseHandler {
 
     if (!messageId) {
       console.error('[ResponseHandler层] 缺少消息ID')
-      throw new ResponseParseError('缺少消息ID');
+      throw createParseError('缺少消息ID');
     }
 
     console.log('[ResponseHandler层] 流处理参数:', {
@@ -183,6 +171,13 @@ class ResponseHandler implements IResponseHandler {
             // 检查是否是结束标记
             if (event.data === '[DONE]') {
               console.log('[ResponseHandler层] 收到流结束标记')
+
+              // 重要：收到DONE标记不应自动完成处于暂停状态的流
+              const currentState = streamStore.getStreamState(messageId);
+              if (currentState?.status === 'paused' || currentState?.isPaused) {
+                console.log('[ResponseHandler层] 流处于暂停状态，即使收到DONE标记也保持暂停状态');
+              }
+
               continue;
             }
 
@@ -232,7 +227,7 @@ class ResponseHandler implements IResponseHandler {
               console.log(`[ResponseHandler层] 当前内容长度: ${accumulatedContent.length}, 推理长度: ${accumulatedReasoning.length}, 令牌数: ${completion_tokens}`)
             }
 
-            // 更新状态
+            // 更新状态 - 注意：updateStream方法内部会根据isPaused状态决定是否更新UI
             this.updateState(
               messageId,
               accumulatedContent,
@@ -262,16 +257,30 @@ class ResponseHandler implements IResponseHandler {
       }
     } catch (error) {
       console.error('[ResponseHandler层] 处理流式响应错误:', error);
-      throw new ResponseParseError('处理流式响应失败', error);
+      throw createParseError('处理流式响应失败', error);
     } finally {
       // 检查流的最终状态
       const finalState = streamStore.getStreamState(messageId);
       console.log(`[ResponseHandler层] 流处理结束，最终状态: ${finalState?.status}`, { messageId })
 
-      if (finalState?.status !== 'completed' && finalState?.status !== 'error') {
-        // 只有在非完成和非错误状态时才标记完成
-        console.log(`[ResponseHandler层] 标记流完成: ${messageId}`)
-        streamStore.completeStream(messageId);
+      // 修复：对暂停状态的特殊处理
+      if (finalState) {
+        if (finalState.status === StreamStatus.PAUSED || finalState.isPaused) {
+          // 流处于暂停状态，但内容已全部接收，标记内容完成
+          console.log(`[ResponseHandler层] 流处于暂停状态，但内容已全部接收，标记内容完成: ${messageId}`, {
+            status: finalState.status,
+            isPaused: finalState.isPaused,
+            content: finalState.accumulatedContent.length
+          })
+          streamStore.markContentComplete(messageId);
+        } else if (finalState.status !== StreamStatus.COMPLETED &&
+          finalState.status !== StreamStatus.ERROR) {
+          // 非暂停、非完成、非错误状态，正常标记完成
+          console.log(`[ResponseHandler层] 标记流完成: ${messageId}`, {
+            status: finalState.status
+          })
+          streamStore.completeStream(messageId);
+        }
       }
     }
   }
@@ -311,7 +320,7 @@ class ResponseHandler implements IResponseHandler {
     } else if (!isStream && !(response instanceof Response)) {
       this.handleNormalResponse(response, updateCallback);
     } else {
-      throw new ResponseParseError('响应类型与处理模式不匹配');
+      throw createParseError('响应类型与处理模式不匹配');
     }
   }
 

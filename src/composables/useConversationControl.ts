@@ -4,7 +4,7 @@ import { useStreamStore } from '@/stores/stream'
 import { chatService } from '@/services/chat/chatService'
 import { useStreamControl } from '@/composables/useStreamControl'
 import type { Message } from '@/types/chat'
-import type { ChatMessage, UpdateCallback } from '@/types/api'
+import type { UpdateCallback } from '@/types/api'
 import type {
   ConversationState,
   ConversationControlOptions,
@@ -29,7 +29,6 @@ export function useConversationControl(
 ): ConversationControlContext {
   const {
     chatStore = useNormalizedChatStore,
-    streamStore = useStreamStore,
     clearOnUnmount = false
   } = options
 

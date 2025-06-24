@@ -8,6 +8,8 @@ import { initializeAllCodeBlocks, createCodeBlockObserver } from '@/utils/markdo
 const props = defineProps<{
   content: string
   isStreaming?: boolean
+  isPaused?: boolean
+  isContentComplete?: boolean
   speed?: number
 }>()
 
@@ -87,10 +89,25 @@ const replaceCursorMarker = (html: string): string => {
 const renderedContent = computed(() => {
   if (!displayText.value) return ''
 
+  // 记录渲染状态，帮助调试
+  console.log('TypeWriter渲染内容', {
+    contentLength: displayText.value.length,
+    isStreaming: props.isStreaming,
+    isPaused: props.isPaused,
+    isContentComplete: props.isContentComplete,
+    isComplete: isComplete.value
+  })
+
   // 如果不是流式响应或已完成，直接渲染
   if (!props.isStreaming || isComplete.value) {
     const rendered = md.render(displayText.value)
     // 使用DOMPurify净化输出
+    return sanitizeHtml(rendered)
+  }
+
+  // 如果内容已完全接收但处于暂停状态，不显示光标
+  if (props.isPaused && props.isContentComplete) {
+    const rendered = md.render(displayText.value)
     return sanitizeHtml(rendered)
   }
 
@@ -150,8 +167,8 @@ const updateDisplayText = () => {
   // 直接显示内容，保持同步
   displayText.value = props.content
 
-  // 设置状态
-  isComplete.value = !props.isStreaming
+  // 设置状态 - 简化逻辑：当不是流式或已暂停且内容完成时，标记为完成
+  isComplete.value = !props.isStreaming || (props.isPaused && props.isContentComplete)
 
   // 将优化放到微任务队列中，避免与Vue渲染循环直接交互
   Promise.resolve().then(() => {
@@ -181,12 +198,26 @@ const initializeCodeBlocks = () => {
 // 监听内容变化
 watch(
   () => props.content,
-  (newContent) => {
+  (newContent, oldContent) => {
     if (!newContent) return
+
+    // 记录内容变化，帮助调试
+    if (oldContent && newContent !== oldContent) {
+      console.log('TypeWriter内容变化', {
+        oldLength: oldContent.length,
+        newLength: newContent.length,
+        diff: newContent.length - oldContent.length,
+        isStreaming: props.isStreaming,
+        isPaused: props.isPaused,
+        isContentComplete: props.isContentComplete
+      })
+    }
 
     // 同步更新显示内容
     displayText.value = newContent
-    isComplete.value = !props.isStreaming
+    
+    // 简化状态逻辑
+    isComplete.value = !props.isStreaming || (props.isPaused && props.isContentComplete)
 
     // 将优化延迟到下一个事件循环，避免干扰响应式更新
     setTimeout(() => {
@@ -199,17 +230,44 @@ watch(
   { immediate: true }
 )
 
-// 监听流式状态变化
+// 监听显示文本变化
 watch(
-  () => props.isStreaming,
-  (isStreaming) => {
-    // 如果从流式变为非流式，更新完成状态
-    if (!isStreaming) {
-      isComplete.value = true
-      // 流式结束后确保代码块功能正常
+  displayText,
+  (newText) => {
+    console.log('TypeWriter显示文本变化', {
+      length: newText.length,
+      isStreaming: props.isStreaming,
+      isPaused: props.isPaused,
+      isContentComplete: props.isContentComplete,
+      isComplete: isComplete.value
+    })
+    
+    // 每次显示文本变化时也初始化代码块
+    nextTick(() => {
       initializeCodeBlocks()
-    }
+    })
   }
+)
+
+// 监听组合状态变化
+watch(
+  () => ({
+    isStreaming: props.isStreaming,
+    isPaused: props.isPaused,
+    isContentComplete: props.isContentComplete
+  }),
+  (newState) => {
+    console.log('TypeWriter状态变化', newState)
+    
+    // 更新完成状态 - 简化逻辑
+    isComplete.value = !newState.isStreaming || (newState.isPaused && newState.isContentComplete)
+    
+    // 状态变化后重新初始化代码块
+    nextTick(() => {
+      initializeCodeBlocks()
+    })
+  },
+  { deep: true }
 )
 
 // 监听渲染内容变化，初始化新的代码块

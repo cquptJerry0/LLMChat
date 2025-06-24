@@ -1,11 +1,19 @@
-export interface ApiErrorResponse {
-  message?: string;
-  code?: string;
-  [key: string]: any;
-}
 
 /**
- * API错误基类
+ * 业务错误码
+ */
+export const BusinessErrorCode = {
+  INVALID_STATE: 'INVALID_STATE',
+  INVALID_RESPONSE: 'INVALID_RESPONSE',
+  STREAM_ERROR: 'STREAM_ERROR',
+  UNAUTHORIZED: 'UNAUTHORIZED',
+  RATE_LIMITED: 'RATE_LIMITED',
+  INVALID_INPUT: 'INVALID_INPUT',
+  OPERATION_FAILED: 'OPERATION_FAILED'
+} as const;
+
+/**
+ * API错误
  */
 export class ApiError extends Error {
   constructor(
@@ -14,13 +22,26 @@ export class ApiError extends Error {
     public code?: string,
     public response?: any
   ) {
-    super(message)
-    this.name = 'ApiError'
+    super(message);
+    this.name = 'ApiError';
   }
 }
 
 /**
- * 业务逻辑错误
+ * 响应解析错误
+ */
+export class ResponseParseError extends Error {
+  constructor(
+    message: string,
+    public readonly originalError?: unknown
+  ) {
+    super(message);
+    this.name = 'ResponseParseError';
+  }
+}
+
+/**
+ * 业务错误
  */
 export class BusinessError extends Error {
   constructor(
@@ -28,64 +49,69 @@ export class BusinessError extends Error {
     public code: string,
     public data?: any
   ) {
-    super(message)
-    this.name = 'BusinessError'
+    super(message);
+    this.name = 'BusinessError';
   }
 }
 
 /**
- * 网络请求错误处理函数
- * 专门处理网络层面的错误，如连接失败、超时等
+ * 统一App错误
+ */
+export class AppError extends Error {
+  constructor(
+    message: string,
+    public readonly type: string,
+    public readonly code: string,
+    public readonly data?: any
+  ) {
+    super(message);
+    this.name = 'AppError';
+  }
+}
+
+/**
+ * API错误
  */
 export function handleApiError(error: unknown): ApiError {
-  // 处理 fetch 相关错误
-  if (error instanceof TypeError && error.message.includes('fetch')) {
-    // 网络错误（如请求失败）
-    return new ApiError('网络连接失败，请检查网络', undefined, 'NETWORK_ERROR');
-  }
-
-  // 处理已经是 ApiError 的情况
+  // 已经是ApiError
   if (error instanceof ApiError) {
     return error;
   }
 
-  // 处理 AbortError（请求被中断）
+  // 处理AbortError
   if (error instanceof DOMException && error.name === 'AbortError') {
     return new ApiError('请求已取消', undefined, 'REQUEST_ABORTED');
   }
 
   // 其他错误
   if (error instanceof Error) {
-    return new ApiError(
-      error.message,
-      undefined,
-      'UNKNOWN_ERROR'
-    );
+    return new ApiError(error.message);
   }
 
-  return new ApiError(
-    '未知错误',
-    undefined,
-    'UNKNOWN_ERROR'
-  );
+  return new ApiError('未知错误');
 }
 
 /**
  * 创建业务错误
  */
 export function createBusinessError(code: string, message: string, data?: any): BusinessError {
-  return new BusinessError(message, code, data)
+  return new BusinessError(message, code, data);
 }
 
 /**
- * 常见业务错误代码
+ * 创建解析错误
  */
-export enum BusinessErrorCode {
-  INVALID_STATE = 'INVALID_STATE',
-  INVALID_RESPONSE = 'INVALID_RESPONSE',
-  STREAM_ERROR = 'STREAM_ERROR',
-  UNAUTHORIZED = 'UNAUTHORIZED',
-  RATE_LIMITED = 'RATE_LIMITED',
-  INVALID_INPUT = 'INVALID_INPUT',
-  OPERATION_FAILED = 'OPERATION_FAILED'
+export function createParseError(message: string, originalError?: unknown): ResponseParseError {
+  return new ResponseParseError(message, originalError);
+}
+
+/**
+ * 简单错误处理函数
+ */
+export function handleError(error: unknown): Error {
+  if (error instanceof Error) {
+    return error;
+  }
+
+  return new Error(typeof error === 'string' ? error : '未知错误');
 }

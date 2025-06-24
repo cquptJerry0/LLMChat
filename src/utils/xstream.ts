@@ -57,23 +57,6 @@ export interface XStreamOptions<Output = SSEOutput> {
    * @default ':'
    */
   kvSeparator?: string
-
-  /**
-   * 错误处理选项
-   * 当流处理过程中发生错误时的回调函数
-   * @default console.error
-   */
-  errorHandler?: (error: Error) => void
-
-  /**
-   * 流取消时的回调函数
-   */
-  onCancel?: () => void
-
-  /**
-   * 流发生错误时的回调函数
-   */
-  onError?: (error: Error) => void
 }
 
 /**
@@ -92,24 +75,6 @@ export interface XReadableStream<T = SSEOutput>
    * 流读取器引用，用于内部管理
    */
   reader?: ReadableStreamDefaultReader<T>
-
-  /**
-   * 取消流的处理方法
-   * @returns Promise<void>
-   */
-  cancel(): Promise<void>
-
-  /**
-   * 中止流的处理方法
-   * @returns Promise<void>
-   */
-  abort(): Promise<void>
-
-  /**
-   * 暂停流的处理方法
-   * @returns Promise<void>
-   */
-  pause(): Promise<void>
 }
 
 /**
@@ -235,9 +200,6 @@ export function createXStream<Output = SSEOutput>(
     streamSeparator = '\n\n',
     partSeparator = '\n',
     kvSeparator = ':',
-    errorHandler = console.error,
-    onCancel,
-    onError
   } = options
 
   // 参数验证
@@ -297,10 +259,6 @@ export function createXStream<Output = SSEOutput>(
       }
     } catch (error) {
       console.error('Stream processing error:', error);
-      if (error instanceof Error) {
-        errorHandler(error);
-        onError?.(error);
-      }
     } finally {
       if (streamReader) {
         try {
@@ -316,49 +274,6 @@ export function createXStream<Output = SSEOutput>(
     }
   }
 
-  // 添加取消方法
-  xstream.cancel = async () => {
-    isCancelled = true
-    if (streamReader) {
-      try {
-        await streamReader.cancel()
-        streamReader.releaseLock()
-      } catch (error) {
-        console.error('Error during stream cancellation:', error)
-      }
-      streamReader = null
-      xstream.reader = undefined
-    }
-    onCancel?.();
-  }
-
-  // 添加中止方法
-  xstream.abort = async () => {
-    isAborted = true
-    if (signal) {
-      const controller = new AbortController()
-      controller.abort()
-      signal = controller.signal
-    }
-    await xstream.cancel()
-  }
-
-  // 添加暂停方法
-  xstream.pause = async () => {
-    isCancelled = true
-    await xstream.cancel()
-  }
-
-  // 监听中止信号
-  if (signal) {
-    signal.addEventListener('abort', () => {
-      isAborted = true
-      xstream.cancel().catch(errorHandler)
-    })
-  }
-
   return xstream
 }
-
-// Export the default function as XStream for backward compatibility
 export const XStream = createXStream;
