@@ -119,46 +119,6 @@ const renderedContent = computed(() => {
   return sanitizeHtml(replaceCursorMarker(rendered))
 })
 
-// 使用rIC优化大型内容的后续渲染
-const optimizeMarkdownRendering = (content: string) => {
-  if (!content || content.length < 1000) return
-
-  // 内容长度显著增加时，才进行优化
-  if (content.length - lastRenderedLength < 500) return
-
-  lastRenderedLength = content.length
-
-  // 使用requestIdleCallback
-  if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
-    try {
-      const idleCallback = window.requestIdleCallback ||
-        ((cb: IdleRequestCallback) => setTimeout(cb, 1));
-
-      idleCallback(
-        () => {
-          try {
-            // 预渲染markdown，将结果缓存在内部
-            // 包装在try-catch中，避免任何错误影响主流程
-            md.render(content)
-
-            // 对代码块进行预渲染
-            if (content.includes('```')) {
-              const codeBlocks = content.match(/```[\s\S]*?```/g) || []
-              for (let i = 0; i < Math.min(codeBlocks.length, 5); i++) {
-                md.render(codeBlocks[i])
-              }
-            }
-          } catch (err) {
-            console.error('Markdown optimization error:', err)
-          }
-        },
-        { timeout: 1000 }
-      )
-    } catch (err) {
-      console.error('Failed to schedule optimization:', err)
-    }
-  }
-}
 
 // 更新显示文本
 const updateDisplayText = () => {
@@ -169,11 +129,6 @@ const updateDisplayText = () => {
 
   // 设置状态 - 简化逻辑：当不是流式或已暂停且内容完成时，标记为完成
   isComplete.value = !props.isStreaming || (props.isPaused && props.isContentComplete)
-
-  // 将优化放到微任务队列中，避免与Vue渲染循环直接交互
-  Promise.resolve().then(() => {
-    optimizeMarkdownRendering(props.content)
-  })
 }
 
 // 初始化代码块交互功能
@@ -215,14 +170,9 @@ watch(
 
     // 同步更新显示内容
     displayText.value = newContent
-    
+
     // 简化状态逻辑
     isComplete.value = !props.isStreaming || (props.isPaused && props.isContentComplete)
-
-    // 将优化延迟到下一个事件循环，避免干扰响应式更新
-    setTimeout(() => {
-      optimizeMarkdownRendering(newContent)
-    }, 0)
 
     // 内容变化后初始化代码块
     initializeCodeBlocks()
@@ -241,7 +191,7 @@ watch(
       isContentComplete: props.isContentComplete,
       isComplete: isComplete.value
     })
-    
+
     // 每次显示文本变化时也初始化代码块
     nextTick(() => {
       initializeCodeBlocks()
@@ -258,10 +208,10 @@ watch(
   }),
   (newState) => {
     console.log('TypeWriter状态变化', newState)
-    
+
     // 更新完成状态 - 简化逻辑
     isComplete.value = !newState.isStreaming || (newState.isPaused && newState.isContentComplete)
-    
+
     // 状态变化后重新初始化代码块
     nextTick(() => {
       initializeCodeBlocks()

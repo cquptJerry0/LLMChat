@@ -3,8 +3,10 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { Sender } from 'vue-element-plus-x'
 import type { CSSProperties } from 'vue'
 import { useConversationControlChild } from '@/composables/useConversationControl'
-import { useStreamControlChild } from '@/composables/useStreamControl'
 import ChatButton from '@/components/ChatButton.vue'
+import { useRouter } from 'vue-router'
+
+const router = useRouter()
 
 // 输入框内容和状态
 const senderValue = ref('')
@@ -18,20 +20,10 @@ const inputStyle: CSSProperties = {
 }
 
 // 获取会话控制
-const { messageActions } = useConversationControlChild()
-
-// 获取流控制
-const streamControl = useStreamControlChild() as any // 临时使用any类型避免类型错误
-const { state: streamState } = streamControl
+const { messageActions, conversationActions } = useConversationControlChild()
 
 // 计算占位符文本
-const placeholder = computed(() => {
-  return streamState.value.isStreaming
-    ? '正在生成回复，按 Esc 中断...'
-    : streamState.value.isPaused
-      ? '生成已中断，按 Ctrl+R 继续...'
-      : '输入消息，按 Enter 发送，按 Shift+Enter 换行...'
-})
+const placeholder = '正在生成回复，按 Esc 中断...'
 
 // 处理发送按钮图标颜色
 const sendButtonIconColor = computed(() => {
@@ -45,33 +37,17 @@ const handleSend = async () => {
   try {
     // 发送消息
     const content = senderValue.value.trim()
+    const newId = conversationActions.create(content.slice(0, 10))
     await messageActions.send(content)
-
     // 清空输入框
     senderRef.value?.clear()
+    router.push({
+      name: 'conversation',
+      params: { conversationId: newId }
+    })
   } catch (error) {
     console.error('发送消息失败:', error)
   }
-}
-
-// 中断生成
-const handleStop = () => {
-  if (streamState.value.isStreaming && streamState.value.messageId) {
-    // 只暂停流，不中断请求
-    streamControl.pauseStream()
-  }
-}
-
-// 恢复生成
-const handleResume = async () => {
-  if (streamState.value.isPaused && streamState.value.messageId) {
-    streamControl.resumeStream()
-  }
-}
-
-// 处理语音识别状态变化
-const handleRecordingChange = (isRecording: boolean) => {
-  console.log('语音识别状态:', isRecording)
 }
 
 </script>
@@ -87,12 +63,9 @@ const handleRecordingChange = (isRecording: boolean) => {
         :input-style="inputStyle"
         class="custom-sender"
         :placeholder="placeholder"
-        :loading="streamState.isStreaming"
         clearable
         :submit-btn-disabled="!senderValue.trim()"
         @submit="handleSend"
-        @cancel="handleStop"
-        @recording-change="handleRecordingChange"
         allow-speech
       >
         <template #prefix>
@@ -111,7 +84,6 @@ const handleRecordingChange = (isRecording: boolean) => {
               tooltip="附件"
             />
             <ChatButton
-              v-if="!streamState.isStreaming && !streamState.isPaused"
               icon="send"
               type="primary"
               tooltip="发送 (Ctrl+Enter)"
@@ -119,24 +91,6 @@ const handleRecordingChange = (isRecording: boolean) => {
               circle
               :disabled="!senderValue.trim()"
               @click="handleSend"
-            />
-            <ChatButton
-              v-else-if="streamState.isStreaming"
-              icon="pause"
-              type="primary"
-              tooltip="中断生成 (Esc)"
-              iconColor="var(--icon-color-secondary)"
-              circle
-              @click="handleStop"
-            />
-            <ChatButton
-              v-else-if="streamState.isPaused"
-              icon="play"
-              type="primary"
-              tooltip="继续生成 (Ctrl+R)"
-              iconColor="var(--icon-color-secondary)"
-              circle
-              @click="handleResume"
             />
         </div>
         </template>

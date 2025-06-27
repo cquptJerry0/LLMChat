@@ -4,7 +4,6 @@ import { useStreamStore } from '@/stores/stream'
 import {
   BusinessErrorCode,
   createBusinessError,
-  handleError,
   ResponseParseError
 } from '../base/errorHandler'
 import { calculateSpeed } from '@/utils/speed'

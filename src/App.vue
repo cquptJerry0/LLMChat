@@ -1,15 +1,7 @@
 <script setup>
-import { RouterView } from 'vue-router'
+import MainPage from './views/MainPage/MainPage.vue'
 </script>
 
 <template>
-  <RouterView />
+  <router-view />
 </template>
-
-<style lang="scss">
-:root {
-  --sidebar-width: 260px;
-}
-
-
-</style>

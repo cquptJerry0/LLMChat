@@ -225,12 +225,12 @@ const handleResume = () => {
 
   &--streaming {
     border-bottom: 1px solid #409eff;
-  }
+    }
 
   &--content-complete {
     border-bottom: 1px dashed #e6a23c;
   }
-}
+  }
 
 .assistant-avatar {
   flex-shrink: 0;

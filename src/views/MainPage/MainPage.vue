@@ -6,7 +6,18 @@ import { useNormalizedChatStore } from '@/stores/normalizedChat'
 import { Monitor, Close } from '@element-plus/icons-vue'
 import ChatLayout from './layout/ChatLayout.vue'
 import StreamMonitor from '@/components/StreamMonitor.vue'
-import MainWindow from './layout/MainWindow.vue'
+import { useComponentsPreload } from '@/composables/useComponentsPreload'
+
+const { startPreload } = useComponentsPreload([
+() => import('@/views/MainPage/layout/MainWindow.vue'),
+  () => import('@/views/MainPage/components/MainWindow/MessageList/MessageList.vue'),
+  () => import('@/views/MainPage/components/MainWindow/MessageList/components/AssistantBubble.vue'),
+  () => import('@/views/MainPage/components/MainWindow/MessageList/components/UserBubble.vue'),
+  () => import('@/views/MainPage/components/MainWindow/ChatHeader/ChatHeader.vue'),
+  () => import('@/views/MainPage/components/MainWindow/ChatInput/ChatInput.vue'),
+  () => import('@/views/MainPage/components/MainWindow/ChatHeader/components/SettingPanel.vue'),
+  () => import('@/views/MainPage/components/MainWindow/ChatHeader/components/ThemePanel.vue'),
+])
 
 // 路由相关
 const route = useRoute()
@@ -170,12 +181,13 @@ defineExpose({
   <div class="main-page">
     <ChatLayout>
       <template #main-window="{ toggleSidebar }">
-        <MainWindow
+        <!-- <MainWindow
           :key="props.conversationId"
           :conversation-id="props.conversationId"
           @toggle-sidebar="toggleSidebar"
-        />
-      </template>
+        /> -->
+        <router-view @toggle-sidebar="toggleSidebar"/>
+      </template> 
     </ChatLayout>
 
     <!-- 网络状态提示 -->

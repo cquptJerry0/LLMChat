@@ -6,7 +6,7 @@ import SettingPanel from './components/SettingPanel.vue'
 import ThemePanel from './components/ThemePanel.vue'
 import { useNormalizedChatStore } from '@/stores/normalizedChat'
 import { useRouter } from 'vue-router'
-
+import { Message } from '@/types/chat'
 const router = useRouter()
 // 使用父组件提供的会话控制
 const { state, conversationActions } = useConversationControlChild()
@@ -94,6 +94,9 @@ const createNewConversation = () => {
     params: { conversationId: newId }
   });
 }
+const isExporting = ref(false)
+
+
 // 定义事件
 defineEmits(['toggle-sidebar'])
 
