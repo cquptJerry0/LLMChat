@@ -129,37 +129,40 @@ export function useStreamControl(initialMessageId?: string) {
 
     // 如果内容已全部接收，直接显示完整内容
     if (stream.isContentComplete) {
-      console.log('[StreamControl] 内容已全部接收，直接显示完整内容')
+      console.log('[StreamControl] 内容已全部接收，直接显示完整内容', stream.accumulatedContent.length)
 
       // 获取消息对象
       const message = chatStore.messages.get(messageId.value)
       if (message) {
-        if (stream.accumulatedReasoning) {
-          message.reasoning_content = stream.accumulatedReasoning
-        }
-        // 直接更新消息内容
-        message.content = stream.accumulatedContent
-        console.log('[StreamControl] 恢复流', message.content)
-
-        // 使用nextTick确保DOM已更新
-        nextTick(() => {
-          console.log('[StreamControl] DOM已更新，内容长度:', message.content.length)
-          chatStore.updateMessage(messageId.value, {
-            content: stream.accumulatedContent,
-            reasoning_content: stream.accumulatedReasoning || ''
-          })
-          // 可以在这里添加额外的强制刷新逻辑，如果需要的话
-          // 例如，可以触发一个自定义事件通知组件刷新
+        // 1. 先通过store更新消息内容
+        chatStore.updateMessage(messageId.value, {
+          content: stream.accumulatedContent,
+          reasoning_content: stream.accumulatedReasoning || ''
         })
-      }
 
-      // 标记流为完成状态
-      streamStore.completeStream(messageId.value)
-      return true
+        // 2. 使用nextTick确保DOM更新后再标记流为完成
+        nextTick(() => {
+          // 3. 触发自定义事件通知组件刷新 - 直接发送完整内容
+          const event = new CustomEvent('stream-completed', {
+            detail: {
+              messageId: messageId.value,
+              content: stream.accumulatedContent,
+              reasoning_content: stream.accumulatedReasoning || '',
+              isContentComplete: true,
+              isCompleted: true
+            }
+          })
+          window.dispatchEvent(event)
+
+          streamStore.completeStream(messageId.value)
+        })
+
+        return true
+      }
     }
 
     // 正常恢复流程 - 使用store中的resumeStream方法
-    console.log('[Stream ++Control] 恢复流', messageId.value)
+    console.log('[StreamControl] 恢复流', messageId.value)
     const result = streamStore.resumeStream(messageId.value)
     return !!result
   }

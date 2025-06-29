@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted, computed, watch, ref, nextTick, inject } from 'vue'
+import { onMounted, onUnmounted, computed, watch, ref, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
 import { useConversationControlChild } from '@/composables/useConversationControl'
 import { useNormalizedChatStore } from '@/stores/normalizedChat'
-import { useResizeObserver, useScroll, useThrottleFn } from '@vueuse/core'
+import { useResizeObserver } from '@vueuse/core'
 import ChatHeader from '../components/MainWindow/ChatHeader/ChatHeader.vue'
 import MessageList from '../components/MainWindow/MessageList/MessageList.vue'
 import ChatInput from '../components/MainWindow/ChatInput/ChatInput.vue'

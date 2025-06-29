@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch, onMounted, nextTick, computed, onUnmounted } from 'vue'
+import { ref, watchEffect, onMounted, nextTick, onUnmounted } from 'vue'
 import { md } from '@/utils/markdown'
 import { sanitizeHtml } from '@/utils/markdown/domPurify'
 import { initializeAllCodeBlocks, createCodeBlockObserver } from '@/utils/markdown/codeBlock'
@@ -13,20 +13,39 @@ const props = defineProps<{
   speed?: number
 }>()
 
-// 显示的文本
-const displayText = ref('')
-// 打字机效果是否完成
-const isComplete = ref(false)
-// 光标类型
-const CURSOR_HTML = '<span class="typewriter-cursor"></span>'
-// 上次渲染的内容长度 - 用于判断何时触发优化
-// 使用普通变量，而不是ref，避免响应式更新
-let lastRenderedLength = 0
+// 添加日志，监控props变化
+watchEffect(() => {
+  console.log('[TypeWriter] Props变化', {
+    contentLength: props.content?.length,
+    contentHash: props.content ? hashString(props.content.substring(0, 20)) : 'empty',
+    isStreaming: props.isStreaming,
+    isPaused: props.isPaused,
+    isContentComplete: props.isContentComplete
+  })
+})
 
-// 内容容器引用，用于代码块初始化
+// 简单的字符串哈希函数，用于调试
+function hashString(str: string): string {
+  let hash = 0
+  for (let i = 0; i < str.length; i++) {
+    const char = str.charCodeAt(i)
+    hash = ((hash << 5) - hash) + char
+    hash = hash & hash // Convert to 32bit integer
+  }
+  return hash.toString(16)
+}
+
 const contentRef = ref<HTMLElement | null>(null)
-// 代码块观察器
 let codeBlockObserver: MutationObserver | null = null
+
+// 存储渲染结果
+const renderedContent = ref('')
+// 存储直接更新的内容
+const directContent = ref('')
+
+// 光标HTML
+const CURSOR_HTML = '<span class="typewriter-cursor"></span>'
+const CODE_CURSOR_HTML = '<span class="code-cursor"></span>'
 
 // 处理Markdown内容，在适当位置插入光标
 const processMarkdown = (text: string): string => {
@@ -42,28 +61,19 @@ const processMarkdown = (text: string): string => {
     // 检查是否是代码块开始或结束
     if (line.startsWith('```')) {
       if (!inCodeBlock) {
-        // 代码块开始，检查是否指定了语言
         inCodeBlock = true
         languageSpecified = line.length > 3 && !!line.slice(3).trim()
-        return line
       } else {
-        // 代码块结束
         inCodeBlock = false
-        return line
       }
+      return line
     }
 
     // 如果是最后一行且需要显示光标
-    if (index === lines.length - 1 && props.isStreaming && !isComplete.value) {
+    if (index === lines.length - 1 && props.isStreaming && !props.isContentComplete) {
       if (inCodeBlock) {
-        // 在代码块内
-        if (languageSpecified) {
-          // 语言指定的代码块中添加特殊注释标记，以便后续替换
-          return line + ' /* CURSOR_POSITION */'
-        } else {
-          // 没有语言的代码块，直接添加光标HTML
-          return line + CURSOR_HTML
-        }
+        // 在代码块内添加特殊标记
+        return line + ' /* CURSOR_POSITION */'
       } else {
         // 不在代码块内，添加HTML光标
         return line + CURSOR_HTML
@@ -78,171 +88,122 @@ const processMarkdown = (text: string): string => {
 
 // 在渲染后的HTML中替换特殊标记为光标
 const replaceCursorMarker = (html: string): string => {
-  // 查找并替换注释标记
-  return html.replace(
-    /\/\* CURSOR_POSITION \*\//g,
-    '<span class="code-cursor"></span>'
-  )
-}
-
-// 带光标的Markdown渲染
-const renderedContent = computed(() => {
-  if (!displayText.value) return ''
-
-  // 如果不是流式响应或已完成，直接渲染
-  if (!props.isStreaming || isComplete.value) {
-    const rendered = md.render(displayText.value)
-    // 使用DOMPurify净化输出
-    return sanitizeHtml(rendered)
-  }
-
-  // 如果内容已完全接收但处于暂停状态，不显示光标
-  if (props.isPaused && props.isContentComplete) {
-    const rendered = md.render(displayText.value)
-    return sanitizeHtml(rendered)
-  }
-
-  // 处理Markdown内容并渲染
-  const processed = processMarkdown(displayText.value)
-  const rendered = md.render(processed)
-
-  // 替换特殊标记为光标并净化
-  return sanitizeHtml(replaceCursorMarker(rendered))
-})
-
-
-// 更新显示文本
-const updateDisplayText = () => {
-  if (!props.content) return
-
-  // 直接显示内容，保持同步
-  displayText.value = props.content
-
-  // 设置状态 - 简化逻辑：当不是流式或已暂停且内容完成时，标记为完成
-  isComplete.value = !props.isStreaming || (props.isPaused && props.isContentComplete)
+  return html.replace(/\/\* CURSOR_POSITION \*\//g, CODE_CURSOR_HTML)
 }
 
 // 初始化代码块交互功能
 const initializeCodeBlocks = () => {
-  // 确保DOM已更新
-  nextTick(() => {
-    if (contentRef.value) {
-      // 初始化所有现有代码块
-      initializeAllCodeBlocks(contentRef.value)
+  if (contentRef.value) {
+    initializeAllCodeBlocks(contentRef.value)
 
-      // 如果观察器已存在，先断开连接
-      if (codeBlockObserver) {
-        codeBlockObserver.disconnect()
-      }
-
-      // 创建新的观察器监视后续添加的代码块
-      codeBlockObserver = createCodeBlockObserver(contentRef.value)
+    // 重置观察器
+    if (codeBlockObserver) {
+      codeBlockObserver.disconnect()
     }
-  })
+    codeBlockObserver = createCodeBlockObserver(contentRef.value)
+  }
 }
 
-// 监听内容变化
-watch(
-  () => props.content,
-  (newContent, oldContent) => {
-    if (!newContent) return
+// 监听流完成事件，直接更新内容
+const handleStreamCompleted = (event: CustomEvent) => {
+  const { content } = event.detail
+  if (content) {
+    console.log('[TypeWriter] 收到流完成事件，直接更新内容', content.length)
+    // 直接渲染完整内容
+    directContent.value = sanitizeHtml(md.render(content))
 
-    // 记录内容变化，帮助调试
-    if (oldContent && newContent !== oldContent) {
-      console.log('TypeWriter内容变化', {
-        oldLength: oldContent.length,
-        newLength: newContent.length,
-        diff: newContent.length - oldContent.length,
-        isStreaming: props.isStreaming,
-        isPaused: props.isPaused,
-        isContentComplete: props.isContentComplete
-      })
+    // 在下一个DOM更新周期初始化代码块
+    nextTick(() => {
+      initializeCodeBlocks()
+      console.log('[TypeWriter] 流完成后代码块初始化完成')
+    })
+  }
+}
+
+// 使用watchEffect处理渲染和代码块初始化
+watchEffect(() => {
+  // 如果有直接更新的内容，优先使用
+  if (directContent.value) {
+    renderedContent.value = directContent.value
+    return
+  }
+
+  // 记录当前时间，用于性能分析
+  const startTime = performance.now()
+
+  // 根据当前状态渲染内容
+  let html = ''
+
+  if (!props.content) {
+    html = ''
+  } else if (!props.isStreaming || props.isContentComplete) {
+    // 如果不是流式响应或内容已完成，直接渲染完整内容
+    html = sanitizeHtml(md.render(props.content))
+    console.log('[TypeWriter] 完整内容渲染', props.content.length)
+  } else if (props.isPaused) {
+    // 如果处于暂停状态
+    if (props.isContentComplete) {
+      // 如果内容已完全接收但处于暂停状态，不显示光标
+      html = sanitizeHtml(md.render(props.content))
+      console.log('[TypeWriter] 暂停状态，内容已完成', props.content.length)
+    } else {
+      // 暂停但内容未完全接收，显示光标
+      const processed = processMarkdown(props.content)
+      const rendered = md.render(processed)
+      html = sanitizeHtml(replaceCursorMarker(rendered))
+      console.log('[TypeWriter] 暂停状态，内容未完成', props.content.length)
     }
+  } else {
+    // 正常流式输出状态，显示光标
+    const processed = processMarkdown(props.content)
+    const rendered = md.render(processed)
+    html = sanitizeHtml(replaceCursorMarker(rendered))
+    console.log('[TypeWriter] 流式状态', props.content.length)
+  }
 
-    // 同步更新显示内容
-    displayText.value = newContent
+  // 更新渲染内容
+  renderedContent.value = html
 
-    // 简化状态逻辑
-    isComplete.value = !props.isStreaming || (props.isPaused && props.isContentComplete)
+  // 记录渲染时间
+  const endTime = performance.now()
+  console.log(`[TypeWriter] 渲染耗时: ${endTime - startTime}ms, 内容长度: ${props.content.length}, 渲染结果长度: ${html.length}`)
 
-    // 内容变化后初始化代码块
+  // 在下一个DOM更新周期初始化代码块
+  nextTick(() => {
     initializeCodeBlocks()
-  },
-  { immediate: true }
-)
-
-// 监听显示文本变化
-watch(
-  displayText,
-  (newText) => {
-    console.log('TypeWriter显示文本变化', {
-      length: newText.length,
-      isStreaming: props.isStreaming,
-      isPaused: props.isPaused,
-      isContentComplete: props.isContentComplete,
-      isComplete: isComplete.value
-    })
-
-    // 每次显示文本变化时也初始化代码块
-    nextTick(() => {
-      initializeCodeBlocks()
-    })
-  }
-)
-
-// 监听组合状态变化
-watch(
-  () => ({
-    isStreaming: props.isStreaming,
-    isPaused: props.isPaused,
-    isContentComplete: props.isContentComplete
-  }),
-  (newState) => {
-    console.log('TypeWriter状态变化', newState)
-
-    // 更新完成状态 - 简化逻辑
-    isComplete.value = !newState.isStreaming || (newState.isPaused && newState.isContentComplete)
-
-    // 状态变化后重新初始化代码块
-    nextTick(() => {
-      initializeCodeBlocks()
-    })
-  },
-  { deep: true }
-)
-
-// 监听渲染内容变化，初始化新的代码块
-watch(
-  renderedContent,
-  () => {
-    // 等待DOM更新
-    nextTick(() => {
-      initializeCodeBlocks()
-    })
-  }
-)
-
-// 组件挂载后处理内容
-onMounted(() => {
-  if (props.content) {
-    updateDisplayText()
-    initializeCodeBlocks()
-  }
+    console.log('[TypeWriter] 代码块初始化完成')
+  })
 })
 
-// 组件卸载时清理
+onMounted(() => {
+  // 组件挂载时初始化代码块（如果有内容）
+  if (props.content) {
+    nextTick(initializeCodeBlocks)
+  }
+
+  // 添加流完成事件监听
+  window.addEventListener('stream-completed', handleStreamCompleted as EventListener)
+})
+
 onUnmounted(() => {
+  // 组件卸载时清理观察器
   if (codeBlockObserver) {
     codeBlockObserver.disconnect()
     codeBlockObserver = null
   }
+
+  // 移除事件监听
+  window.removeEventListener('stream-completed', handleStreamCompleted as EventListener)
 })
 </script>
 
 <template>
   <div class="typewriter">
     <div class="typewriter__content" ref="contentRef">
-      <div class="markdown-content" v-html="renderedContent"></div>
+      <div class="markdown-content"
+           v-html="renderedContent"
+           :key="`content-${props.content.length}-${props.isContentComplete ? 'complete' : 'stream'}`">
+      </div>
     </div>
   </div>
 </template>
@@ -335,5 +296,4 @@ onUnmounted(() => {
     opacity: 0.3;
   }
 }
-
 </style>

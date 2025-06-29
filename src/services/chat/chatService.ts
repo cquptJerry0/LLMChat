@@ -196,15 +196,6 @@ class ChatService implements IChatService {
             resumeInfo
           };
 
-          console.log('开始处理流式响应', {
-            status: streamResponse.status,
-            statusText: streamResponse.statusText,
-            contentType: streamResponse.headers.get('content-type'),
-            hasBody: !!streamResponse.body,
-            messageId,
-            hasResumeInfo: !!resumeInfo
-          });
-
           // 异步处理流式响应，不等待完成
           this.handleStreamResponse(streamResponse, updateCallback, streamOptions, messageId)
             .catch(error => {

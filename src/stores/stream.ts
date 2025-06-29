@@ -86,10 +86,10 @@ export const useStreamStore = defineStore(
 
         // 如果处于暂停状态，不更新UI
         if (stream.isPaused) {
-          console.log(`[StreamStore] 暂停状态更新内容: ${messageId}`, {
-            contentLength: content.length,
-            reasoningLength: (reasoning_content || '').length
-          })
+          // console.log(`[StreamStore] 暂停状态更新内容: ${messageId}`, {
+          //   contentLength: content.length,
+          //   reasoningLength: (reasoning_content || '').length
+          // })
 
           // 仍然保存到localStorage以防断网
           persistStreamState(messageId, {
@@ -103,7 +103,6 @@ export const useStreamStore = defineStore(
             pausedAt: stream.pausedAt,
             isContentComplete: stream.isContentComplete
           })
-
           return
         }
 

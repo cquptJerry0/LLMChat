@@ -25,6 +25,7 @@ const { messageActions } = useConversationControlChild()
 const streamControl = useStreamControlChild() as any
 const { state: streamState } = streamControl
 
+const content = computed(() =>  props.message.content)
 // 如果是当前消息且是助手消息，设置为活跃消息
 onMounted(() => {
   if (props.isLatestMessage && props.message.role === 'assistant') {
@@ -41,8 +42,7 @@ const messageStreamState = computed(() => {
       isPaused: false,
       isError: false,
       isCompleted: true,
-      isIncomplete: false,
-      isContentComplete: false
+      isIncomplete: false
     }
   }
 
@@ -54,15 +54,13 @@ const messageStreamState = computed(() => {
       isPaused: false,
       isError: false,
       isCompleted: true,
-      isIncomplete: false,
-      isContentComplete: false
+      isIncomplete: false
     }
   }
 
-  // 记录状态变化，帮助调试
-  console.log('MessageBubble流状态', {
-    messageId: props.message.id,
-    status: streamState.value.status,
+  console.log('[MessageBubble] 当前活跃消息状态', {
+    id: props.message.id,
+    contentLength: props.message.content.length,
     isStreaming: streamState.value.isStreaming,
     isPaused: streamState.value.isPaused,
     isContentComplete: streamState.value.isContentComplete
@@ -111,7 +109,7 @@ const handlePause = () => {
 // 恢复生成
 const handleResume = async () => {
   if (messageStreamState.value.isPaused) {
-    streamControl.resumeStream()
+      streamControl.resumeStream()
   }
 }
 </script>
@@ -124,7 +122,7 @@ const handleResume = async () => {
     />
     <AssistantBubble
       v-else
-      :content="message.content"
+      :content="content"
       :reasoning-content="message.reasoning_content"
       :is-streaming="messageStreamState.isStreaming"
       :is-error="messageStreamState.isError"

@@ -3,7 +3,8 @@ import { computed, ref, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { useConversationControlChild } from '@/composables/useConversationControl'
 import MessageBubble from './components/MessageBubble.vue'
 import { useStreamControl } from '@/composables/useStreamControl'
-import { watchEffect } from 'vue'
+import { useStreamStore } from '@/stores/stream'
+import { useNormalizedChatStore } from '@/stores/normalizedChat'
 // Props定义
 defineProps<{
   isLatestMessage?: boolean
@@ -11,6 +12,35 @@ defineProps<{
 
 // 使用父组件提供的会话控制
 const { state: conversationState } = useConversationControlChild()
+
+// 计算当前会话的消息
+const allMessages = computed(() => {
+  return conversationState.value.currentMessages || []
+})
+
+// 获取最新消息
+const latestMessage = computed(() => {
+  // 访问refreshCounter触发依赖收集
+  const _ = refreshCounter.value
+
+  if (allMessages.value.length === 0) return null
+
+  // 获取最后一条消息
+  const message = allMessages.value[allMessages.value.length - 1]
+
+  // 记录日志
+  console.log('[MessageList] 计算latestMessage', {
+    id: message.id,
+    role: message.role,
+    contentLength: message.content.length,
+    refreshCounter: refreshCounter.value
+  })
+
+  return message
+})
+
+// 添加强制刷新计数器
+const refreshCounter = ref(0)
 
 // 初始化流控制，使用当前的lastAssistantMessageId
 const streamControl = useStreamControl(conversationState.value.lastAssistantMessageId || '')
@@ -25,9 +55,24 @@ watch(
   }
 )
 
-// 计算当前会话的消息
-const allMessages = computed(() => {
-  return conversationState.value.currentMessages || []
+// 监听流状态变化，当流状态变化时强制刷新latestMessage
+watch(
+  () => [streamControl.state.value.isContentComplete, streamControl.state.value.status],
+  () => {
+    // 增加计数器，强制刷新latestMessage
+    refreshCounter.value++
+  }
+)
+
+// 检查消息是否正在流式传输
+const isMessageStreaming = computed(() => {
+  return streamControl.state.value.isStreaming
+})
+
+// 检查最新消息是否是AI助手的消息
+const isLatestMessageFromAssistant = computed(() => {
+  if (!latestMessage.value) return false
+  return latestMessage.value.role === 'assistant'
 })
 
 // 虚拟列表相关配置
@@ -39,26 +84,6 @@ const endIndex = ref(0) // 结束索引
 // 观察器元素引用
 const topSentinelRef = ref<HTMLElement | null>(null)
 const bottomSentinelRef = ref<HTMLElement | null>(null)
-
-// 获取外部滚动容器
-const getScrollContainer = () => document.querySelector('.message-list-wrapper')
-
-// 检查消息是否正在流式传输
-const isMessageStreaming = computed(() => {
-  return streamControl.state.value.isStreaming
-})
-
-// 获取最新消息
-const latestMessage = computed(() => {
-  if (allMessages.value.length === 0) return null
-  return allMessages.value[allMessages.value.length - 1]
-})
-
-// 检查最新消息是否是AI助手的消息
-const isLatestMessageFromAssistant = computed(() => {
-  if (!latestMessage.value) return false
-  return latestMessage.value.role === 'assistant'
-})
 
 // 历史消息（除了最新的正在流式输出的消息）
 const historicalMessages = computed(() => {
@@ -87,27 +112,31 @@ const updateVisibleMessages = () => {
     return
   }
 
-  // 确保结束索引不超过消息总数
+  // 确保索引在有效范围内
   const end = Math.min(endIndex.value, historicalMessages.value.length)
   const start = Math.max(0, startIndex.value)
 
   // 更新可见消息
   visibleMessages.value = historicalMessages.value.slice(start, end)
-
 }
 
-
+// 初始化可见消息
 const initVisibleMessages = () => {
   if (historicalMessages.value.length <= BATCH_SIZE * 2) {
+    // 如果消息数量较少，显示所有消息
     startIndex.value = 0
     endIndex.value = historicalMessages.value.length
   } else {
+    // 否则只显示最后一批消息
     startIndex.value = Math.max(0, historicalMessages.value.length - BATCH_SIZE)
     endIndex.value = historicalMessages.value.length
   }
 
   updateVisibleMessages()
 }
+
+// 获取外部滚动容器
+const getScrollContainer = () => document.querySelector('.message-list-wrapper')
 
 // 创建交叉观察器
 let topObserver: IntersectionObserver | null = null
@@ -118,11 +147,10 @@ const setupObservers = () => {
   const scrollContainer = getScrollContainer()
   if (!scrollContainer) return
 
-  // 创建顶部观察器
+  // 创建顶部观察器 - 向上加载更多消息
   topObserver = new IntersectionObserver(
     (entries) => {
       if (entries[0].isIntersecting && startIndex.value > 0) {
-        // 向上加载更多消息
         startIndex.value = Math.max(0, startIndex.value - BATCH_SIZE)
         updateVisibleMessages()
       }
@@ -134,11 +162,10 @@ const setupObservers = () => {
     }
   )
 
-  // 创建底部观察器
+  // 创建底部观察器 - 向下加载更多消息
   bottomObserver = new IntersectionObserver(
     (entries) => {
       if (entries[0].isIntersecting && endIndex.value < historicalMessages.value.length) {
-        // 向下加载更多消息
         endIndex.value = Math.min(historicalMessages.value.length, endIndex.value + BATCH_SIZE)
         updateVisibleMessages()
       }
@@ -162,22 +189,20 @@ const observeSentinels = () => {
   }
 }
 
-
-// 处理历史消息变化
+// 监听历史消息变化
 watch(
   historicalMessages,
   (newMessages, oldMessages) => {
     const newLength = newMessages.length
     const oldLength = oldMessages?.length || 0
 
-    // 如果历史消息数量变化，重新计算可见消息
+    // 只在消息数量变化时更新
     if (newLength !== oldLength) {
-      // 新增消息
       if (newLength > oldLength) {
-        // 确保新消息在可见范围内
+        // 新增消息 - 确保新消息在可见范围内
         endIndex.value = newLength
 
-        // 当历史消息数量变化较大时，可能需要调整起始索引
+        // 如果消息数量变化较大，调整起始索引
         if (oldLength === 0 || newLength - oldLength > BATCH_SIZE) {
           startIndex.value = Math.max(0, newLength - BATCH_SIZE)
         }
@@ -192,9 +217,57 @@ watch(
   { deep: true }
 )
 
+// 监听自定义事件
+const handleStreamCompleted = (event: CustomEvent) => {
+  // 获取事件中的消息内容
+  const { messageId, content, reasoning_content } = event.detail
+
+  // 获取消息对象
+  const messageIndex = allMessages.value.findIndex(msg => msg.id === messageId)
+
+  if (messageIndex !== -1 && latestMessage.value && allMessages.value[messageIndex].id === latestMessage.value.id) {
+    console.log('[MessageList] 准备更新latestMessage', {
+      oldLength: latestMessage.value.content?.length,
+      newLength: (content || allMessages.value[messageIndex].content)?.length,
+      isContentComplete: true
+    })
+
+    // 强制更新消息对象 - 直接修改数组中的对象
+    const updatedContent = content || allMessages.value[messageIndex].content
+    const updatedReasoningContent = reasoning_content || allMessages.value[messageIndex].reasoning_content
+
+    // 直接更新数组中的对象，确保Vue能够检测到变化
+    allMessages.value.splice(messageIndex, 1, {
+      ...allMessages.value[messageIndex],
+      content: updatedContent,
+      reasoning_content: updatedReasoningContent
+    })
+
+    // 同时更新latestMessage引用
+    latestMessage.value.content = updatedContent
+    latestMessage.value.reasoning_content = updatedReasoningContent
+
+    console.log('[MessageList] 更新latestMessage内容', latestMessage.value.content)
+
+    // 确保流状态也被正确更新
+    streamControl.state.value.isContentComplete = true
+    streamControl.state.value.isPaused = false
+    streamControl.state.value.isStreaming = false
+    streamControl.state.value.isCompleted = true
+
+    const chatStore = useNormalizedChatStore()
+    chatStore.updateMessage(messageId, {
+      content: updatedContent,
+      reasoning_content: updatedReasoningContent
+    })
+  }
+
+  // 增加刷新计数器，强制重新渲染
+  refreshCounter.value++
+}
+
 // 组件挂载时初始化
 onMounted(() => {
-  // 初始化可见消息
   nextTick(() => {
     initVisibleMessages()
 
@@ -204,6 +277,9 @@ onMounted(() => {
       observeSentinels()
     }, 100)
   })
+
+  // 添加自定义事件监听
+  window.addEventListener('stream-completed', handleStreamCompleted as EventListener)
 })
 
 // 组件卸载时清理
@@ -215,6 +291,9 @@ onUnmounted(() => {
   if (bottomObserver) {
     bottomObserver.disconnect()
   }
+
+  // 移除事件监听
+  window.removeEventListener('stream-completed', handleStreamCompleted as EventListener)
 })
 </script>
 
@@ -312,5 +391,4 @@ onUnmounted(() => {
     }
   }
 }
-
 </style>

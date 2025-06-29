@@ -1,10 +1,11 @@
 import { ComputedRef } from 'vue'
 import type { UpdateCallback } from './api'
+import { StreamStatus } from './stream'
 
 /**
  * 流状态的可能值
  */
-type StreamStatus = 'streaming' | 'paused' | 'completed' | 'error'
+// type StreamStatus = 'streaming' | 'paused' | 'completed' | 'error'
 
 /**
  * 流数据的完整状态定义
@@ -36,6 +37,16 @@ export interface StreamState {
   isIncomplete: boolean;
   /** 流是否已完成 */
   isCompleted: boolean;
+  /** 流是否已完全接收 */
+  isContentComplete: boolean;
+  /** 暂停时的时间戳 */
+  pausedAt?: number;
+  /** 累积的内容 */
+  accumulatedContent?: string;
+  /** 累积的推理内容 */
+  accumulatedReasoning?: string;
+  /** 上次的完成令牌数 */
+  lastCompletionTokens?: number;
 }
 
 /**
@@ -51,32 +62,13 @@ interface PersistedStreamState extends StreamState {
  */
 interface StreamControlOptions {
   /** 自定义聊天存储 */
-  chatStore?: typeof useNormalizedChatStore;
+  chatStore?: any; // 使用any避免循环引用
   /** 自定义流存储 */
-  streamStore?: typeof useStreamStore;
+  streamStore?: any; // 使用any避免循环引用
   /** 自动保存间隔（毫秒） */
   autoSaveInterval?: number;
   /** 是否在组件卸载时清除状态 */
   clearOnUnmount?: boolean;
-}
-
-/**
- * 提供给子组件的控制接口
- */
-export interface StreamControlContext {
-  /** 当前流状态 */
-  state: ComputedRef<StreamState>;
-  /** 控制方法 */
-  controls: {
-    /** 暂停生成 */
-    pause: () => void;
-    /** 恢复生成 */
-    resume: (updateCallback?: UpdateCallback) => Promise<void>;
-    /** 取消生成 */
-    cancel: () => void;
-    /** 更新当前控制的消息ID */
-    updateMessageId: (messageId: string) => void;
-  };
 }
 
 /**
@@ -88,6 +80,13 @@ export interface StreamControlReturn {
   resume: (updateCallback?: UpdateCallback) => Promise<void>
   cancel: () => void
   updateMessageId: (messageId: string) => void
+  setMessageId: (id: string) => void
+  startStream: () => string | null
+  updateStream: (content: string, reasoning_content?: string, completion_tokens?: number, speed?: number) => void
+  abortStream: () => boolean | null
+  completeStream: () => boolean | false
+  setStreamError: (error: string) => boolean | false
+  getStreamState: () => StreamState | null
 }
 
 /**

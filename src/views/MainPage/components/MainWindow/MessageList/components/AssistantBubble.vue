@@ -13,6 +13,15 @@ const props = defineProps<{
   avatar: string
 }>()
 
+// 添加日志，监控props变化
+watch(() => props.content, (newContent) => {
+  console.log('[AssistantBubble] content变化', newContent?.length)
+}, { immediate: true })
+
+watch(() => props.isContentComplete, (newValue) => {
+  console.log('[AssistantBubble] isContentComplete变化', newValue)
+}, { immediate: true })
+
 const emit = defineEmits<{
   (e: 'copy'): void
   (e: 'retry'): void
@@ -128,6 +137,7 @@ const handleResume = () => {
               :is-streaming="isStreaming"
               :is-paused="isPaused"
               :is-content-complete="isContentComplete"
+              :key="`reasoning-${reasoningContent.length}-${isContentComplete ? 'complete' : 'stream'}`"
             />
           </div>
 
@@ -138,6 +148,7 @@ const handleResume = () => {
             :is-streaming="isStreaming"
             :is-paused="isPaused"
             :is-content-complete="isContentComplete"
+            :key="`content-${content.length}-${isContentComplete ? 'complete' : 'stream'}`"
           />
         </div>
 

@@ -19,6 +19,7 @@ const { startPreload } = useComponentsPreload([
   () => import('@/views/MainPage/components/MainWindow/ChatHeader/components/ThemePanel.vue'),
 ])
 
+startPreload()
 // 路由相关
 const route = useRoute()
 const router = useRouter()
@@ -187,7 +188,7 @@ defineExpose({
           @toggle-sidebar="toggleSidebar"
         /> -->
         <router-view @toggle-sidebar="toggleSidebar"/>
-      </template> 
+      </template>
     </ChatLayout>
 
     <!-- 网络状态提示 -->

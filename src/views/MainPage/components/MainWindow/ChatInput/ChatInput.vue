@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, } from 'vue'
 import { Sender } from 'vue-element-plus-x'
 import type { CSSProperties } from 'vue'
 import { useConversationControlChild } from '@/composables/useConversationControl'
