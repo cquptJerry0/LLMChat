@@ -1,4 +1,4 @@
-import { computed, inject, provide, ref, watch } from 'vue'
+import { computed, inject, provide, ref, watch, nextTick } from 'vue'
 import { useStreamStore } from '@/stores/stream'
 import { useNormalizedChatStore } from '@/stores/normalizedChat'
 import { StreamStatus } from '@/types/stream'
@@ -134,11 +134,23 @@ export function useStreamControl(initialMessageId?: string) {
       // 获取消息对象
       const message = chatStore.messages.get(messageId.value)
       if (message) {
-        // 直接更新消息内容
-        message.content = stream.accumulatedContent
         if (stream.accumulatedReasoning) {
           message.reasoning_content = stream.accumulatedReasoning
         }
+        // 直接更新消息内容
+        message.content = stream.accumulatedContent
+        console.log('[StreamControl] 恢复流', message.content)
+
+        // 使用nextTick确保DOM已更新
+        nextTick(() => {
+          console.log('[StreamControl] DOM已更新，内容长度:', message.content.length)
+          chatStore.updateMessage(messageId.value, {
+            content: stream.accumulatedContent,
+            reasoning_content: stream.accumulatedReasoning || ''
+          })
+          // 可以在这里添加额外的强制刷新逻辑，如果需要的话
+          // 例如，可以触发一个自定义事件通知组件刷新
+        })
       }
 
       // 标记流为完成状态
@@ -147,7 +159,7 @@ export function useStreamControl(initialMessageId?: string) {
     }
 
     // 正常恢复流程 - 使用store中的resumeStream方法
-    console.log('[StreamControl] 恢复流', messageId.value)
+    console.log('[Stream ++Control] 恢复流', messageId.value)
     const result = streamStore.resumeStream(messageId.value)
     return !!result
   }

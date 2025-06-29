@@ -89,15 +89,6 @@ const replaceCursorMarker = (html: string): string => {
 const renderedContent = computed(() => {
   if (!displayText.value) return ''
 
-  // 记录渲染状态，帮助调试
-  console.log('TypeWriter渲染内容', {
-    contentLength: displayText.value.length,
-    isStreaming: props.isStreaming,
-    isPaused: props.isPaused,
-    isContentComplete: props.isContentComplete,
-    isComplete: isComplete.value
-  })
-
   // 如果不是流式响应或已完成，直接渲染
   if (!props.isStreaming || isComplete.value) {
     const rendered = md.render(displayText.value)

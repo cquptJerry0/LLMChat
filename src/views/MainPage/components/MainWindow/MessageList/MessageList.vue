@@ -3,7 +3,7 @@ import { computed, ref, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { useConversationControlChild } from '@/composables/useConversationControl'
 import MessageBubble from './components/MessageBubble.vue'
 import { useStreamControl } from '@/composables/useStreamControl'
-
+import { watchEffect } from 'vue'
 // Props定义
 defineProps<{
   isLatestMessage?: boolean
@@ -94,10 +94,6 @@ const updateVisibleMessages = () => {
   // 更新可见消息
   visibleMessages.value = historicalMessages.value.slice(start, end)
 
-  console.log('可见历史消息数:', visibleMessages.value.length,
-              '总历史消息数:', historicalMessages.value.length,
-              '可见范围:', startIndex.value, '-', endIndex.value,
-              '流式状态:', isMessageStreaming.value)
 }
 
 
@@ -165,6 +161,7 @@ const observeSentinels = () => {
     bottomObserver.observe(bottomSentinelRef.value)
   }
 }
+
 
 // 处理历史消息变化
 watch(

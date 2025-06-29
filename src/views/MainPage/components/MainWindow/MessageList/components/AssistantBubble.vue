@@ -36,19 +36,6 @@ const messageStatus = computed(() => {
   return 'complete'
 })
 
-// 监听状态变化，帮助调试
-watch(
-  () => ({
-    isStreaming: props.isStreaming,
-    isPaused: props.isPaused,
-    isContentComplete: props.isContentComplete,
-    status: messageStatus.value
-  }),
-  (newState) => {
-    console.log('AssistantBubble状态变化', newState)
-  },
-  { deep: true, immediate: true }
-)
 
 const handleCopy = () => {
   emit('copy')
