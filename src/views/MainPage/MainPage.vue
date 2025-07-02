@@ -3,9 +3,7 @@ import { onMounted, ref, onUnmounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useConversationControl } from '@/composables/useConversationControl'
 import { useNormalizedChatStore } from '@/stores/normalizedChat'
-import { Monitor, Close } from '@element-plus/icons-vue'
 import ChatLayout from './layout/ChatLayout.vue'
-import StreamMonitor from '@/components/StreamMonitor.vue'
 import { useComponentsPreload } from '@/composables/useComponentsPreload'
 
 const { startPreload } = useComponentsPreload([

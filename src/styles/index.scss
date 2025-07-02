@@ -1,6 +1,5 @@
-@use "variables";
-@use "themes";
-
+@use './var.scss';
+@use './themes.scss';
 
 // 全局样式
 :root {

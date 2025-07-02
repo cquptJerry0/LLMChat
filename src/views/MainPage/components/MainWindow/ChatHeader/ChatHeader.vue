@@ -187,20 +187,20 @@ const isSidebarCollapsed = inject('isSidebarCollapsed')
   align-items: center;
   justify-content: space-between;
   height: 50px;
-  padding: 0 $spacing-base;
+  padding: 0 var(--spacing-base);
   background-color: var(--background-color-light);
 
   &__left {
     display: flex;
     align-items: center;
-    gap: $spacing-small;
+    gap: var(--spacing-small);
     flex: 1;
   }
 
   &__title-container {
     display: flex;
     align-items: center;
-    gap: $spacing-small;
+    gap: var(--spacing-small);
     cursor: pointer;
     padding: 2px 8px;
     border-radius: 4px;
@@ -215,7 +215,7 @@ const isSidebarCollapsed = inject('isSidebarCollapsed')
   }
 
   &__title {
-    font-size: $font-size-large;
+    font-size: var(--font-size-large);
     font-weight: 500;
     margin: 0;
     white-space: nowrap;
@@ -237,7 +237,7 @@ const isSidebarCollapsed = inject('isSidebarCollapsed')
   &__right {
     display: flex;
     align-items: center;
-    gap: $spacing-small;
+    gap: var(--spacing-small);
   }
 }
 

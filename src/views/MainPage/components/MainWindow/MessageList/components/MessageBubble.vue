@@ -143,7 +143,7 @@ const handleResume = async () => {
 .message-wrapper {
   display: flex;
   flex-direction: column;
-  margin-bottom: $spacing-large;
+  margin-bottom: var(--spacing-large);
   width: 100%;
   max-width: 780px;
 

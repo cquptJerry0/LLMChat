@@ -2,7 +2,7 @@
  * 代码块交互功能模块
  * 处理代码复制与主题切换等交互
  */
-
+import './codeBlock.scss'
 import { icons } from '@/constants/icons'
 
 // 存储已处理的代码块

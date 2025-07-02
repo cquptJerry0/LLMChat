@@ -340,7 +340,7 @@ onUnmounted(() => {
 
 <style lang="scss" scoped>
 .message-list {
-  padding: $spacing-base;
+  padding: var(--spacing-base);
 
   &__welcome {
     display: flex;
@@ -351,10 +351,10 @@ onUnmounted(() => {
     &-content {
       max-width: 500px;
       text-align: center;
-      padding: $spacing-large;
+      padding: var(--spacing-large);
       background-color: var(--background-color-light);
-      border-radius: $border-radius-large;
-      box-shadow: $box-shadow-light;
+      border-radius: var(--border-radius-large);
+      box-shadow: var(--box-shadow-light);
 
       h2 {
         margin-top: 0;

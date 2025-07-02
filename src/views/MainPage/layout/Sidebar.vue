@@ -93,7 +93,7 @@ defineEmits(['toggle-sidebar'])
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 20px $spacing-base 1px $spacing-base;
+    padding: 20px var(--spacing-base) 1px var(--spacing-base);
   }
 
   &__logo {
@@ -123,18 +123,18 @@ defineEmits(['toggle-sidebar'])
   }
 
   &__header {
-    border-radius: $border-radius-base;
-    padding:  $spacing-base $spacing-small  $spacing-small $spacing-small;
+    border-radius: var(--border-radius-base);
+    padding:  var(--spacing-base) var(--spacing-small)  var(--spacing-small) var(--spacing-small);
   }
 
   &__content {
     flex: 1;
     overflow-y: hidden;
-    padding: $spacing-small 0;
+    padding: var(--spacing-small) 0;
   }
 
   &__footer {
-    padding: $spacing-base;
+    padding: var(--spacing-base);
     display: flex;
     justify-content: center;
   }
@@ -149,7 +149,7 @@ defineEmits(['toggle-sidebar'])
   align-items: center;
   background: #fff;
   border: 1px solid #e0e0e0;
-  border-radius: $border-radius-base;
+  border-radius: var(--border-radius-base);
   padding: 8px 12px;
   cursor: pointer;
   transition: all 0.2s;
@@ -168,14 +168,14 @@ defineEmits(['toggle-sidebar'])
 
   .new-chat-text {
     flex: 1;
-    font-size: $font-size-base;
+    font-size: var(--font-size-base);
     color: var(--text-primary);
     font-weight: 500;
   }
 
   .new-chat-shortcut {
     color: var(--text-secondary);
-    font-size: $font-size-small;
+    font-size: var(--font-size-small);
     background: #f5f5f5;
     border-radius: 4px;
     padding: 2px 4px;

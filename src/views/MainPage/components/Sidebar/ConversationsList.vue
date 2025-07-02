@@ -205,7 +205,7 @@ onBeforeUnmount(() => {
     align-items: center;
     margin-left: 18px;
     gap: 8px;
-    font-size: $font-size-base;
+    font-size: var(--font-size-base);
     color: var(--text-secondary);
     font-weight: 500;
     border-bottom: 1px solid var(--border-color-light);

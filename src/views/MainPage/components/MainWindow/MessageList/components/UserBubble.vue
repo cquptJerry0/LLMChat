@@ -29,7 +29,7 @@ const props = defineProps<{
 
 .user-content {
   color: #000000E6;
-  padding: $spacing-small $spacing-base;
+  padding: var(--spacing-small) var(--spacing-base);
   font-size: 16px;
   font-family: -apple-system, BlinkMacSystem, sans-serif;
   border-radius: 16px 4px 16px 16px;

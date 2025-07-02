@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { Icon as IconifyIcon } from '@iconify/vue'
-import { watchEffect } from 'vue'
 // 定义图标映射
 const iconMap: Record<string, string> = {
   // 系统操作

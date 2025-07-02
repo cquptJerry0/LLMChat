@@ -85,12 +85,12 @@ defineExpose({
 
 <style lang="scss" scoped>
 .theme-panel {
-  padding: $spacing-base;
+  padding: var(--spacing-base);
 
   &__title {
     margin-top: 0;
-    margin-bottom: $spacing-base;
-    font-size: $font-size-large;
+    margin-bottom: var(--spacing-base);
+    font-size: var(--font-size-large);
     font-weight: 500;
     color: var(--text-primary);
   }
@@ -98,15 +98,15 @@ defineExpose({
   &__options {
     display: flex;
     flex-direction: column;
-    gap: $spacing-small;
+    gap: var(--spacing-small);
   }
 
   &__option {
     display: flex;
     align-items: center;
-    gap: $spacing-base;
-    padding: $spacing-base;
-    border-radius: $border-radius-base;
+    gap: var(--spacing-base);
+    padding: var(--spacing-base)  ;
+    border-radius: var(--border-radius-base);
     cursor: pointer;
     transition: background-color 0.2s ease;
 
@@ -130,7 +130,7 @@ defineExpose({
     justify-content: center;
     width: 40px;
     height: 40px;
-    border-radius: $border-radius-circle;
+    border-radius: var(--border-radius-circle);
     background-color: var(--border-color-light);
 
     .theme-panel__option--active & {
@@ -148,7 +148,7 @@ defineExpose({
   }
 
   &__option-desc {
-    font-size: $font-size-small;
+    font-size: varfont-size-small;
     color: var(--text-secondary);
   }
 }
