@@ -1,4 +1,3 @@
-<!-- src/components/common/Icon.vue -->
 <script setup lang="ts">
 import { computed } from 'vue'
 import { Icon as IconifyIcon } from '@iconify/vue'

@@ -1,4 +1,3 @@
-// src/services/index.ts
 export * from './base/apiClient'
 export * from './base/errorHandler'
 export * from './chat/chatService'

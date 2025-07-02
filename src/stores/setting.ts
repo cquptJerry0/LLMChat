@@ -1,7 +1,6 @@
 import { defineStore } from 'pinia'
-import { reactive, ref } from 'vue'
+import { reactive } from 'vue'
 
-// 从环境变量获取配置，回退到默认值
 const API_KEY = import.meta.env.VITE_API_KEY || 'sk-miswxuakfhtsgcrobgggnjnigvbueatzsobuqsigqxanippa';
 const DEFAULT_MODEL = import.meta.env.VITE_DEFAULT_MODEL || 'deepseek-ai/DeepSeek-R1';
 

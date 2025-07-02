@@ -1,4 +1,3 @@
-// src/stores/normalizedChat.ts
 import { defineStore } from 'pinia'
 import { ref, computed, watch } from 'vue'
 import { LRUCache } from '@/utils/LRUCache'
