@@ -202,15 +202,6 @@ defineExpose({
       />
     </div>
 
-    <!-- 流状态监控器 -->
-    <StreamMonitor v-if="showStreamMonitor" class="stream-monitor" />
-
-    <!-- 监控器切换按钮 -->
-    <div class="monitor-toggle" @click="toggleStreamMonitor">
-      <el-icon class="monitor-icon">
-        <component :is="showStreamMonitor ? Close : Monitor" />
-      </el-icon>
-    </div>
   </div>
 </template>
 
