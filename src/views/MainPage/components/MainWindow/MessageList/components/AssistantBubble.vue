@@ -2,8 +2,6 @@
 import TypeWriter from './TypeWriter.vue'
 import ChatButton from '@/components/ChatButton.vue'
 import { ref, computed, watch } from 'vue'
-import { useStreamControlChild } from '@/composables/useStreamControl'
-import { useStreamStore } from '@/stores/stream'
 
 const props = defineProps<{
   content: string

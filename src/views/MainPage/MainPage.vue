@@ -7,7 +7,10 @@ import ChatLayout from './layout/ChatLayout.vue'
 import { useComponentsPreload } from '@/composables/useComponentsPreload'
 
 const { startPreload } = useComponentsPreload([
-
+  () => import('@/views/MainPage/components/ImageGeneration/ImageGeneration.vue'),
+  () => import('@/views/MainPage/components/ImageGeneration/components/ImageCard.vue'),
+  () => import('@/views/MainPage/components/ImageGeneration/components/GenerationPanel.vue'),
+  () => import('@/views/MainPage/components/ImageGeneration/components/GalleryPanel.vue'),
 ])
 
 startPreload()
@@ -34,15 +37,11 @@ const props = defineProps<{
 watch(
   () => props.conversationId,
   (newId, oldId) => {
-    console.log(`Route param changed: ${oldId} -> ${newId}`)
     if (newId && newId !== conversationState.value.currentConversationId) {
       // 如果对话存在，切换到指定对话
       if (chatStore.conversations.has(newId)) {
-        console.log(`Switching to existing conversation: ${newId}`)
         conversationActions.switch(newId)
       } else {
-        // 如果对话不存在，创建新对话
-        console.log(`Creating new conversation as ${newId} does not exist`)
         const newConversationId = conversationActions.create('新的对话')
         // 更新路由到新创建的对话
         router.replace({
@@ -59,10 +58,7 @@ watch(
 watch(
   () => conversationState.value.currentConversationId,
   (newId, oldId) => {
-    console.log(`Current conversation changed: ${oldId} -> ${newId}`)
     if (newId && route.params.conversationId !== newId) {
-      // 更新路由
-      console.log(`Updating route to match current conversation: ${newId}`)
       router.replace({
         name: 'conversation',
         params: { conversationId: newId }
@@ -70,12 +66,6 @@ watch(
     }
   }
 )
-
-// 控制 StreamMonitor 的显示状态
-const showStreamMonitor = ref(false)
-const toggleStreamMonitor = () => {
-  showStreamMonitor.value = !showStreamMonitor.value
-}
 
 // 全局事件监听 - 网络状态变化
 const isOnline = ref(navigator.onLine)
@@ -122,27 +112,6 @@ onUnmounted(() => {
   document.removeEventListener('visibilitychange', handleVisibilityChange)
 })
 
-// 导出会话数据方法
-const exportData = () => {
-  const data = {
-    conversations: Object.fromEntries(chatStore.conversations),
-    messages: Object.fromEntries(chatStore.messages)
-  }
-
-  // 创建下载链接
-  const dataStr = JSON.stringify(data, null, 2)
-  const blob = new Blob([dataStr], { type: 'application/json' })
-  const url = URL.createObjectURL(blob)
-
-  const a = document.createElement('a')
-  a.href = url
-  a.download = `llm-chat-export-${new Date().toISOString().slice(0, 10)}.json`
-  document.body.appendChild(a)
-  a.click()
-  document.body.removeChild(a)
-  URL.revokeObjectURL(url)
-}
-
 // 清理所有会话数据
 const clearAllData = () => {
   if (confirm('确定要清除所有会话数据吗？这将删除所有对话历史。')) {
@@ -163,9 +132,7 @@ const clearAllData = () => {
 
 // 向外部提供方法
 defineExpose({
-  exportData,
   clearAllData,
-  toggleStreamMonitor,
 })
 </script>
 

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, watch } from 'vue'
+import { computed, onMounted, watch, ref } from 'vue'
 import { useConversationControlChild } from '@/composables/useConversationControl'
 import { useStreamControlChild } from '@/composables/useStreamControl'
 import UserBubble from './UserBubble.vue'
@@ -23,13 +23,59 @@ const { messageActions } = useConversationControlChild()
 
 // 获取流控制状态
 const streamControl = useStreamControlChild() as any
-const { state: streamState } = streamControl
+
+// 为当前消息创建独立的状态引用
+const messageStreamState = ref({
+  isStreaming: false,
+  isError: false,
+  isPaused: false,
+  isContentComplete: false,
+  isReasoningComplete: false
+})
+
+// 更新当前消息的流状态
+const updateMessageStreamState = () => {
+  if (props.message.role === 'assistant') {
+    const globalState = streamControl.state.value
+
+    // 仅当当前消息ID与全局状态中的消息ID匹配时，才更新状态
+    if (globalState.messageId === props.message.id) {
+      messageStreamState.value = {
+        isStreaming: globalState.isStreaming,
+        isError: globalState.isError,
+        isPaused: globalState.isPaused,
+        isContentComplete: globalState.isContentComplete,
+        isReasoningComplete: globalState.isReasoningComplete
+      }
+    } else {
+      // 如果不是当前活动消息，则设置为已完成状态
+      messageStreamState.value = {
+        isStreaming: false,
+        isError: false,
+        isPaused: false,
+        isContentComplete: true,
+        isReasoningComplete: true
+      }
+    }
+  }
+}
 
 const content = computed(() =>  props.message.content)
+
 // 如果是当前消息且是助手消息，设置为活跃消息
 onMounted(() => {
   if (props.isLatestMessage && props.message.role === 'assistant') {
     streamControl.setMessageId(props.message.id)
+    updateMessageStreamState()
+  } else {
+    // 非最新消息设置为已完成状态
+    messageStreamState.value = {
+      isStreaming: false,
+      isError: false,
+      isPaused: false,
+      isContentComplete: true,
+      isReasoningComplete: true
+    }
   }
 })
 
@@ -62,37 +108,42 @@ const handleShare = () => {
 
 // 中断生成
 const handlePause = () => {
-  if (streamState.value.isStreaming) {
+  if (messageStreamState.value.isStreaming) {
     // 确保设置当前消息ID
     streamControl.setMessageId(props.message.id)
     // 只暂停流，不中断请求
     streamControl.pauseStream()
+    // 更新本地状态
+    messageStreamState.value.isPaused = true
+    messageStreamState.value.isStreaming = false
   }
 }
 
 // 恢复生成
 const handleResume = async () => {
-  if (streamState.value.isPaused) {
-      streamControl.resumeStream()
+  if (messageStreamState.value.isPaused) {
+    streamControl.setMessageId(props.message.id)
+    streamControl.resumeStream()
+    // 更新本地状态
+    messageStreamState.value.isPaused = false
+    messageStreamState.value.isStreaming = true
   }
 }
 
-// 监控 isReasoningComplete 的变化
-watch(() => streamState.value.isReasoningComplete, (newVal) => {
-  console.log(`[MessageBubble] isReasoningComplete 变化 (消息ID: ${props.message.id}):`, newVal)
-}, { immediate: true })
-
-// 监控整个流状态
-watch(() => streamState.value, (newState) => {
-  if (props.isLatestMessage && props.message.role === 'assistant') {
-    console.log(`[MessageBubble] 流状态变化 (消息ID: ${props.message.id}):`, {
-      isStreaming: newState.isStreaming,
-      isPaused: newState.isPaused,
-      isContentComplete: newState.isContentComplete,
-      isReasoningComplete: newState.isReasoningComplete
-    })
+// 监控全局流状态变化，更新当前消息的状态
+watch(() => streamControl.state.value, (newState) => {
+  // 只有当前消息ID与全局状态中的消息ID匹配时，才更新状态
+  if (props.message.id === newState.messageId) {
+    updateMessageStreamState()
   }
 }, { deep: true, immediate: true })
+
+// 监控 isReasoningComplete 的变化（仅用于调试）
+watch(() => messageStreamState.value.isReasoningComplete, (newVal) => {
+  if (props.message.id === streamControl.state.value.messageId) {
+    console.log(`[MessageBubble] isReasoningComplete 变化 (消息ID: ${props.message.id}):`, newVal)
+  }
+}, { immediate: true })
 </script>
 
 <template>
@@ -105,11 +156,11 @@ watch(() => streamState.value, (newState) => {
       v-else
       :content="content"
       :reasoning-content="message.reasoning_content"
-      :is-streaming="streamState.isStreaming"
-      :is-error="streamState.isError"
-      :is-paused="streamState.isPaused"
-      :is-content-complete="streamState.isContentComplete"
-      :is-reasoning-complete="streamState.isReasoningComplete"
+      :is-streaming="messageStreamState.isStreaming"
+      :is-error="messageStreamState.isError"
+      :is-paused="messageStreamState.isPaused"
+      :is-content-complete="messageStreamState.isContentComplete"
+      :is-reasoning-complete="messageStreamState.isReasoningComplete"
       :avatar="'https://t8.baidu.com/it/u=4011543194,454374607&fm=193'"
       @copy="handleCopy"
       @retry="handleRetry"
@@ -138,3 +189,4 @@ watch(() => streamState.value, (newState) => {
   }
 }
 </style>
+

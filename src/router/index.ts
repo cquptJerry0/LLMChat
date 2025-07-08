@@ -4,7 +4,6 @@ import { useNormalizedChatStore } from '@/stores/normalizedChat'
 const MainPage = () => import('@/views/MainPage/MainPage.vue')
 const Welcome = () => import('@/views/MainPage/components/Welcome/Welcome.vue')
 const MainWindow = () => import('@/views/MainPage/components/MainWindow/MainWindow.vue')
-const TestPage = () => import('@/views/TestPage/TestPage.vue')
 const ImageGeneration = () => import('@/views/MainPage/components/ImageGeneration/ImageGeneration.vue')
 
 const router = createRouter({
@@ -39,12 +38,6 @@ const router = createRouter({
         }
       ]
     },
-    {
-      path: '/test',
-      name: 'test',
-      component: TestPage,
-      meta: { title: '图片生成与管理' }
-    }
   ]
 })
 
