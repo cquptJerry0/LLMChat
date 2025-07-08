@@ -3,8 +3,9 @@ import { useNormalizedChatStore } from '@/stores/normalizedChat'
 
 const MainPage = () => import('@/views/MainPage/MainPage.vue')
 const Welcome = () => import('@/views/MainPage/components/Welcome/Welcome.vue')
-const MainWindow = () => import('@/views/MainPage/layout/MainWindow.vue')
+const MainWindow = () => import('@/views/MainPage/components/MainWindow/MainWindow.vue')
 const TestPage = () => import('@/views/TestPage/TestPage.vue')
+const ImageGeneration = () => import('@/views/MainPage/components/ImageGeneration/ImageGeneration.vue')
 
 const router = createRouter({
   history: createWebHistory(),
@@ -18,7 +19,7 @@ const router = createRouter({
       component: MainPage,
       children: [
         {
-          path: '',  // 空路径匹配 /chat
+          path: '',
           name: 'welcome',
           component: Welcome,
           meta: { title: '开始对话' }
@@ -29,6 +30,12 @@ const router = createRouter({
           component: MainWindow,
           props: true,
           meta: { title: '对话' }
+        },
+        {
+          path: 'image-generation',
+          name: 'image-generation',
+          component: ImageGeneration,
+          meta: { title: '图片生成' }
         }
       ]
     },

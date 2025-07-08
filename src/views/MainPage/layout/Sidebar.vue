@@ -20,6 +20,11 @@ const createNewConversation = () => {
     params: { conversationId: newId }
   })
 }
+const goToImageGeneration = () => {
+  router.push({
+    name: 'image-generation'
+  })
+}
 const settingPanelRef = ref<InstanceType<typeof SettingPanel> | null>(null)
 // 打开设置面板
 const openSettingPanel = () => {
@@ -55,6 +60,13 @@ defineEmits(['toggle-sidebar'])
         </div>
         <span class="new-chat-text">新建会话</span>
         <span class="new-chat-shortcut">Ctrl K</span>
+      </div>
+
+
+      <div style=" margin-top: 10px; ">
+        <div class="new-chat-btn" @click="goToImageGeneration">
+          <span class="new-chat-text" style="font-size: 14px; color: var(--text-primary); display: flex; align-items: center; justify-content: center;">图片生成</span>
+        </div>
       </div>
     </div>
 

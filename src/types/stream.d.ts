@@ -2,13 +2,13 @@
  * 流状态管理相关类型定义
  */
 
-
 export enum StreamStatus {
   STREAMING = 'streaming',
   PAUSED = 'paused',
   COMPLETED = 'completed',
   ERROR = 'error'
 }
+
 
 // 持久化的流状态
 export interface PersistedStreamState {

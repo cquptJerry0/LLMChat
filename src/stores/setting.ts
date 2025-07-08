@@ -33,11 +33,12 @@ export const useSettingStore = defineStore(
         seed: undefined as number | undefined,
         useSeed: false, // 是否使用固定随机种子
 
+
         // 历史记录
-        lastPrompt: '一只可爱的小猫',
+        lastPrompt: '',
 
         // 界面设置
-        showAdvancedSettings: false,
+        showAdvancedSettings: true,
         autoSaveToGallery: true, // 是否自动保存到图库
       }
     })

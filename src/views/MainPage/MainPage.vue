@@ -7,14 +7,7 @@ import ChatLayout from './layout/ChatLayout.vue'
 import { useComponentsPreload } from '@/composables/useComponentsPreload'
 
 const { startPreload } = useComponentsPreload([
-() => import('@/views/MainPage/layout/MainWindow.vue'),
-  () => import('@/views/MainPage/components/MainWindow/MessageList/MessageList.vue'),
-  () => import('@/views/MainPage/components/MainWindow/MessageList/components/AssistantBubble.vue'),
-  () => import('@/views/MainPage/components/MainWindow/MessageList/components/UserBubble.vue'),
-  () => import('@/views/MainPage/components/MainWindow/ChatHeader/ChatHeader.vue'),
-  () => import('@/views/MainPage/components/MainWindow/ChatInput/ChatInput.vue'),
-  () => import('@/views/MainPage/components/MainWindow/ChatHeader/components/SettingPanel.vue'),
-  () => import('@/views/MainPage/components/MainWindow/ChatHeader/components/ThemePanel.vue'),
+
 ])
 
 startPreload()
