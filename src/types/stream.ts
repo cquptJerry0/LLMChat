@@ -15,13 +15,13 @@ export interface PersistedStreamState {
   content: string;
   reasoning_content: string;
   completion_tokens: number;
-  speed: number;
   status: string;
   error?: string;
   timestamp: number;
   savedAt: number;
   pausedAt?: number;
   isContentComplete?: boolean;
+  isReasoningComplete?: boolean;
 }
 
 // 恢复信息接口
@@ -54,6 +54,7 @@ export interface StreamState {
 
   // 新增：标记内容是否已完全接收
   isContentComplete?: boolean;
+  isReasoningComplete?: boolean;
 }
 
 // 恢复结果接口
@@ -90,6 +91,9 @@ export interface StreamStateManager {
 
   // 标记内容完成
   markContentComplete: (messageId: string) => boolean;
+
+  // 标记推理完成
+  reasoningComplete: (messageId: string) => void;
 
   // 设置流错误
   setStreamError: (messageId: string, error: string) => boolean;

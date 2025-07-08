@@ -55,7 +55,9 @@ export const useStreamStore = defineStore(
         accumulatedReasoning: '',
         lastCompletionTokens: 0,
         pausedAt: 0,
-        isPaused: false
+        isPaused: false,
+        isReasoningComplete: false,
+        isContentComplete: false
       }
 
       streams.value.set(streamId, streamState)
@@ -65,7 +67,6 @@ export const useStreamStore = defineStore(
         content: '',
         reasoning_content: '',
         completion_tokens: 0,
-        speed: 0,
         status: StreamStatus.STREAMING,
         timestamp: Date.now(),
         savedAt: Date.now()
@@ -96,7 +97,6 @@ export const useStreamStore = defineStore(
             content: stream.accumulatedContent,
             reasoning_content: stream.accumulatedReasoning || '',
             completion_tokens: completion_tokens || 0,
-            speed: speed || 0,
             status: stream.status,
             timestamp: Date.now(),
             savedAt: Date.now(),
@@ -119,7 +119,6 @@ export const useStreamStore = defineStore(
           content,
           reasoning_content: reasoning_content || '',
           completion_tokens: completion_tokens || 0,
-          speed: speed || 0,
           status: stream.status,
           timestamp: Date.now(),
           savedAt: Date.now(),
@@ -150,7 +149,6 @@ export const useStreamStore = defineStore(
           content: stream.accumulatedContent,
           reasoning_content: stream.accumulatedReasoning,
           completion_tokens: stream.lastCompletionTokens,
-          speed: 0,
           status: StreamStatus.PAUSED,
           timestamp: Date.now(),
           savedAt: Date.now(),
@@ -179,7 +177,6 @@ export const useStreamStore = defineStore(
           content: stream.accumulatedContent,
           reasoning_content: stream.accumulatedReasoning,
           completion_tokens: stream.lastCompletionTokens,
-          speed: 0,
           status: StreamStatus.STREAMING,
           timestamp: Date.now(),
           savedAt: Date.now()
@@ -214,7 +211,6 @@ export const useStreamStore = defineStore(
           content: stream.accumulatedContent,
           reasoning_content: stream.accumulatedReasoning,
           completion_tokens: stream.lastCompletionTokens,
-          speed: 0,
           status: StreamStatus.PAUSED,
           timestamp: Date.now(),
           savedAt: Date.now(),
@@ -226,6 +222,35 @@ export const useStreamStore = defineStore(
       }
 
       return false
+    }
+
+    const reasoningComplete = (messageId: string) => {
+      const streamId = `${STORAGE_KEYS.STREAM_ID_PREFIX}${messageId}`
+      const stream = streams.value.get(streamId)
+      if (stream) {
+        console.log(`[StreamStore] 标记推理内容已完成: ${messageId}`, {
+          beforeState: stream.isReasoningComplete
+        })
+
+        stream.isReasoningComplete = true
+
+        persistStreamState(messageId, {
+          content: stream.accumulatedContent,
+          reasoning_content: stream.accumulatedReasoning,
+          completion_tokens: stream.lastCompletionTokens,
+          status: StreamStatus.PAUSED,
+          timestamp: Date.now(),
+          savedAt: Date.now(),
+          pausedAt: stream.pausedAt,
+          isReasoningComplete: true
+        })
+
+        console.log(`[StreamStore] 推理内容完成标记已设置: ${messageId}`, {
+          afterState: stream.isReasoningComplete
+        })
+      } else {
+        console.warn(`[StreamStore] 无法标记推理内容完成: ${messageId}，流不存在`)
+      }
     }
 
     const completeStream = (messageId: string) => {
@@ -250,7 +275,6 @@ export const useStreamStore = defineStore(
           content: stream.accumulatedContent,
           reasoning_content: stream.accumulatedReasoning,
           completion_tokens: stream.lastCompletionTokens,
-          speed: 0,
           status: StreamStatus.COMPLETED,
           timestamp: Date.now(),
           savedAt: Date.now(),
@@ -283,7 +307,6 @@ export const useStreamStore = defineStore(
           content: stream.accumulatedContent,
           reasoning_content: stream.accumulatedReasoning,
           completion_tokens: stream.lastCompletionTokens,
-          speed: 0,
           status: StreamStatus.ERROR,
           error,
           timestamp: Date.now(),
@@ -311,7 +334,6 @@ export const useStreamStore = defineStore(
               content: savedState.content,
               reasoning_content: savedState.reasoning_content,
               completion_tokens: savedState.completion_tokens,
-              speed: savedState.speed
             })
           }
 
@@ -350,6 +372,7 @@ export const useStreamStore = defineStore(
 
     return {
       streams,
+      reasoningComplete,
       startStream,
       updateStream,
       pauseStream,

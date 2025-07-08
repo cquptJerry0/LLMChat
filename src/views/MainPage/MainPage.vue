@@ -185,7 +185,10 @@ defineExpose({
           :conversation-id="props.conversationId"
           @toggle-sidebar="toggleSidebar"
         /> -->
-        <router-view @toggle-sidebar="toggleSidebar"/>
+        <router-view
+          :key="$route.fullPath"
+          @toggle-sidebar="toggleSidebar"
+        />
       </template>
     </ChatLayout>
 

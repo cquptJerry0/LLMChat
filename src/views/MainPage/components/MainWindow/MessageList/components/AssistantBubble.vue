@@ -2,6 +2,8 @@
 import TypeWriter from './TypeWriter.vue'
 import ChatButton from '@/components/ChatButton.vue'
 import { ref, computed, watch } from 'vue'
+import { useStreamControlChild } from '@/composables/useStreamControl'
+import { useStreamStore } from '@/stores/stream'
 
 const props = defineProps<{
   content: string
@@ -10,17 +12,10 @@ const props = defineProps<{
   isError?: boolean
   isPaused?: boolean
   isContentComplete?: boolean
+  isReasoningComplete?: boolean
   avatar: string
 }>()
 
-// 添加日志，监控props变化
-watch(() => props.content, (newContent) => {
-  console.log('[AssistantBubble] content变化', newContent?.length)
-}, { immediate: true })
-
-watch(() => props.isContentComplete, (newValue) => {
-  console.log('[AssistantBubble] isContentComplete变化', newValue)
-}, { immediate: true })
 
 const emit = defineEmits<{
   (e: 'copy'): void
@@ -80,6 +75,21 @@ const handlePause = () => {
 const handleResume = () => {
   emit('resume')
 }
+
+// 监控 isReasoningComplete 属性变化
+watch(() => props.isReasoningComplete, (newVal) => {
+  console.log('[AssistantBubble] isReasoningComplete 属性变化:', newVal)
+}, { immediate: true })
+
+// 监控所有流状态属性
+watch(() => ({
+  isStreaming: props.isStreaming,
+  isPaused: props.isPaused,
+  isContentComplete: props.isContentComplete,
+  isReasoningComplete: props.isReasoningComplete
+}), (newState) => {
+  console.log('[AssistantBubble] 流状态属性集合:', newState)
+}, { deep: true, immediate: true })
 </script>
 
 <template>
@@ -136,8 +146,9 @@ const handleResume = () => {
               :content="reasoningContent"
               :is-streaming="isStreaming"
               :is-paused="isPaused"
-              :is-content-complete="isContentComplete"
-              :key="`reasoning-${reasoningContent.length}-${isContentComplete ? 'complete' : 'stream'}`"
+              :is-content-complete="isReasoningComplete"
+              role="reasoning"
+              :key="`reasoning-${reasoningContent?.length || 0}-${isContentComplete || isReasoningComplete ? 'complete' : 'stream'}`"
             />
           </div>
 
@@ -148,7 +159,8 @@ const handleResume = () => {
             :is-streaming="isStreaming"
             :is-paused="isPaused"
             :is-content-complete="isContentComplete"
-            :key="`content-${content.length}-${isContentComplete ? 'complete' : 'stream'}`"
+            role="content"
+            :key="`content-${content.length}-${isContentComplete || isReasoningComplete ? 'complete' : 'stream'}`"
           />
         </div>
 

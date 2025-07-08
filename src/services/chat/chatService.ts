@@ -279,9 +279,6 @@ class ChatService implements IChatService {
     }
   }
 
-  /**
-   * 简化的错误处理
-   */
   private handleError(error: unknown, messageId?: string): void {
     if (!messageId) return;
 

@@ -18,10 +18,10 @@ const inputStyle: CSSProperties = {
 }
 
 // 获取会话控制
-const { messageActions } = useConversationControlChild()
+const { state: conversationState, messageActions } = useConversationControlChild()
 
 // 获取流控制
-const streamControl = useStreamControlChild() as any // 临时使用any类型避免类型错误
+const streamControl = useStreamControlChild() as any
 const { state: streamState } = streamControl
 
 // 计算占位符文本
@@ -43,9 +43,17 @@ const handleSend = async () => {
   if (!senderValue.value.trim()) return
 
   try {
-    // 发送消息
+    const messages = conversationState.value.currentMessages || []
+
+    // 获取上一条消息的ID作为parentId
+    let parentId: string | undefined = undefined
+    if (messages.length > 0) {
+      parentId = messages[messages.length - 1].id
+    }
+
+    // 发送消息，传递上一条消息的ID作为parentId
     const content = senderValue.value.trim()
-    await messageActions.send(content)
+    await messageActions.send(content, parentId)
 
     // 清空输入框
     senderRef.value?.clear()

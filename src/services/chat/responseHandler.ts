@@ -205,7 +205,9 @@ class ResponseHandler implements IResponseHandler {
             }
 
             const delta: DeltaMessage = data.choices[0].delta;
-
+            if (delta.reasoning_content === null) {
+              streamStore.reasoningComplete(messageId);
+            }
             // 更新累积内容
             if (delta.content) {
               accumulatedContent += delta.content;

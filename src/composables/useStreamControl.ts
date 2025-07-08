@@ -58,8 +58,8 @@ export function useStreamControl(initialMessageId?: string) {
       isError: streamState?.status === StreamStatus.ERROR,
       isCompleted: !streamState || streamState.status === StreamStatus.COMPLETED,
       pausedAt: streamState?.pausedAt,
-      // 重要：即使流状态变为完成，也保留内容完成标志
-      isContentComplete
+      isContentComplete,
+      isReasoningComplete: streamState?.isReasoningComplete || false
     }
   })
 
@@ -149,6 +149,7 @@ export function useStreamControl(initialMessageId?: string) {
               content: stream.accumulatedContent,
               reasoning_content: stream.accumulatedReasoning || '',
               isContentComplete: true,
+              isReasoningComplete: stream.isReasoningComplete || false,
               isCompleted: true
             }
           })

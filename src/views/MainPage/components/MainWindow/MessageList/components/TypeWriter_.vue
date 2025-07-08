@@ -11,7 +11,6 @@ const props = defineProps<{
   isPaused?: boolean
   isContentComplete?: boolean
   speed?: number
-  role?: string // 添加角色属性，用于区分是内容还是推理
 }>()
 
 // 显示的文本
@@ -20,7 +19,6 @@ const displayText = ref('')
 const isComplete = ref(false)
 // 光标类型
 const CURSOR_HTML = '<span class="typewriter-cursor"></span>'
-const CODE_CURSOR_HTML = '<span class="code-cursor"></span>'
 // 上次渲染的内容长度 - 用于判断何时触发优化
 // 使用普通变量，而不是ref，避免响应式更新
 let lastRenderedLength = 0
@@ -30,11 +28,7 @@ const contentRef = ref<HTMLElement | null>(null)
 // 代码块观察器
 let codeBlockObserver: MutationObserver | null = null
 
-// ===== 辅助函数模块 =====
-
-/**
- * 处理Markdown内容，在适当位置插入光标
- */
+// 处理Markdown内容，在适当位置插入光标
 const processMarkdown = (text: string): string => {
   if (!text) return ''
 
@@ -82,20 +76,53 @@ const processMarkdown = (text: string): string => {
   return processedLines.join('\n')
 }
 
-/**
- * 在渲染后的HTML中替换特殊标记为光标
- */
+// 在渲染后的HTML中替换特殊标记为光标
 const replaceCursorMarker = (html: string): string => {
   // 查找并替换注释标记
   return html.replace(
     /\/\* CURSOR_POSITION \*\//g,
-    CODE_CURSOR_HTML
+    '<span class="code-cursor"></span>'
   )
 }
 
-/**
- * 初始化代码块交互功能
- */
+// 带光标的Markdown渲染
+const renderedContent = computed(() => {
+  if (!displayText.value) return ''
+
+  // 如果不是流式响应或已完成，直接渲染
+  if (!props.isStreaming || isComplete.value) {
+    const rendered = md.render(displayText.value)
+    // 使用DOMPurify净化输出
+    return sanitizeHtml(rendered)
+  }
+
+  // 如果内容已完全接收但处于暂停状态，不显示光标
+  if (props.isPaused && props.isContentComplete) {
+    const rendered = md.render(displayText.value)
+    return sanitizeHtml(rendered)
+  }
+
+  // 处理Markdown内容并渲染
+  const processed = processMarkdown(displayText.value)
+  const rendered = md.render(processed)
+
+  // 替换特殊标记为光标并净化
+  return sanitizeHtml(replaceCursorMarker(rendered))
+})
+
+
+// 更新显示文本
+const updateDisplayText = () => {
+  if (!props.content) return
+
+  // 直接显示内容，保持同步
+  displayText.value = props.content
+
+  // 设置状态 - 简化逻辑：当不是流式或已暂停且内容完成时，标记为完成
+  isComplete.value = !props.isStreaming || (props.isPaused && props.isContentComplete)
+}
+
+// 初始化代码块交互功能
 const initializeCodeBlocks = () => {
   // 确保DOM已更新
   nextTick(() => {
@@ -114,47 +141,6 @@ const initializeCodeBlocks = () => {
   })
 }
 
-// ===== 计算属性 =====
-
-/**
- * 带光标的Markdown渲染
- */
-const renderedContent = computed(() => {
-  if (!displayText.value) return ''
-
-  // 如果不是流式响应或已完成，直接渲染
-  if (!props.isStreaming || isComplete.value) {
-    const rendered = md.render(displayText.value)
-    // 使用DOMPurify净化输出
-    return sanitizeHtml(rendered)
-  }
-
-  if ((props.isPaused || props.role === 'reasoning') && props.isContentComplete) {
-    const rendered = md.render(displayText.value)
-    return sanitizeHtml(rendered)
-  }
-
-  // 处理Markdown内容并渲染
-  const processed = processMarkdown(displayText.value)
-  const rendered = md.render(processed)
-
-  // 替换特殊标记为光标并净化
-  return sanitizeHtml(replaceCursorMarker(rendered))
-})
-
-// ===== 响应式监听 =====
-
-// 监控所有props变化，用于调试
-watch(() => ({
-  content: props.content?.length || 0,
-  isStreaming: props.isStreaming,
-  isPaused: props.isPaused,
-  isContentComplete: props.isContentComplete,
-  role: props.role
-}), (newProps) => {
-  console.log(`[TypeWriter${props.role ? `-${props.role}` : ''}] props变化:`, newProps)
-}, { deep: true, immediate: true })
-
 // 监听内容变化
 watch(
   () => props.content,
@@ -163,30 +149,45 @@ watch(
 
     // 记录内容变化，帮助调试
     if (oldContent && newContent !== oldContent) {
-      // 避免过多日志，只在内容有明显变化时记录
-      if (Math.abs(newContent.length - oldContent.length) > 10) {
-        console.log(`[TypeWriter${props.role ? `-${props.role}` : ''}] 内容变化`, {
-          oldLength: oldContent.length,
-          newLength: newContent.length,
-          diff: newContent.length - oldContent.length,
-          isStreaming: props.isStreaming,
-          isPaused: props.isPaused
-        })
-      }
+      console.log('TypeWriter内容变化', {
+        oldLength: oldContent.length,
+        newLength: newContent.length,
+        diff: newContent.length - oldContent.length,
+        isStreaming: props.isStreaming,
+        isPaused: props.isPaused,
+        isContentComplete: props.isContentComplete
+      })
     }
 
     // 同步更新显示内容
     displayText.value = newContent
 
-    // 更新完成状态
+    // 简化状态逻辑
     isComplete.value = !props.isStreaming || (props.isPaused && props.isContentComplete)
 
-    // 内容变化后初始化代码块，但避免频繁更新
-    if (!oldContent || Math.abs(newContent.length - oldContent.length) > 5) {
-      nextTick(initializeCodeBlocks)
-    }
+    // 内容变化后初始化代码块
+    initializeCodeBlocks()
   },
   { immediate: true }
+)
+
+// 监听显示文本变化
+watch(
+  displayText,
+  (newText) => {
+    console.log('TypeWriter显示文本变化', {
+      length: newText.length,
+      isStreaming: props.isStreaming,
+      isPaused: props.isPaused,
+      isContentComplete: props.isContentComplete,
+      isComplete: isComplete.value
+    })
+
+    // 每次显示文本变化时也初始化代码块
+    nextTick(() => {
+      initializeCodeBlocks()
+    })
+  }
 )
 
 // 监听组合状态变化
@@ -197,52 +198,35 @@ watch(
     isContentComplete: props.isContentComplete
   }),
   (newState) => {
-    // 更新完成状态
+    console.log('TypeWriter状态变化', newState)
+
+    // 更新完成状态 - 简化逻辑
     isComplete.value = !newState.isStreaming || (newState.isPaused && newState.isContentComplete)
 
-    console.log(`[TypeWriter${props.role ? `-${props.role}` : ''}] 状态变化:`, {
-      ...newState,
-      isComplete: isComplete.value
-    })
-
     // 状态变化后重新初始化代码块
-    nextTick(initializeCodeBlocks)
+    nextTick(() => {
+      initializeCodeBlocks()
+    })
   },
-  { deep: true, immediate: true }
+  { deep: true }
 )
 
-// 监听渲染内容变化，但减少初始化频率
+// 监听渲染内容变化，初始化新的代码块
 watch(
   renderedContent,
-  (newContent, oldContent) => {
-    // 只在内容有显著变化时初始化代码块
-    if (!oldContent || newContent.length - oldContent.length > 20) {
-      nextTick(initializeCodeBlocks)
-    }
+  () => {
+    // 等待DOM更新
+    nextTick(() => {
+      initializeCodeBlocks()
+    })
   }
 )
-
-// ===== 生命周期钩子 =====
 
 // 组件挂载后处理内容
 onMounted(() => {
   if (props.content) {
-    // 初始化显示内容
-    displayText.value = props.content
-
-    // 设置初始状态
-    isComplete.value = !props.isStreaming || (props.isPaused && props.isContentComplete)
-
-    // 初始化代码块
+    updateDisplayText()
     initializeCodeBlocks()
-
-    console.log(`[TypeWriter${props.role ? `-${props.role}` : ''}] 组件挂载:`, {
-      contentLength: props.content.length,
-      isStreaming: props.isStreaming,
-      isPaused: props.isPaused,
-      isContentComplete: props.isContentComplete,
-      isComplete: isComplete.value
-    })
   }
 })
 
@@ -351,4 +335,5 @@ onUnmounted(() => {
     opacity: 0.3;
   }
 }
+
 </style>

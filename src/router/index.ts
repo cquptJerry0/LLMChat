@@ -4,29 +4,7 @@ import { useNormalizedChatStore } from '@/stores/normalizedChat'
 const MainPage = () => import('@/views/MainPage/MainPage.vue')
 const Welcome = () => import('@/views/MainPage/components/Welcome/Welcome.vue')
 const MainWindow = () => import('@/views/MainPage/layout/MainWindow.vue')
-
-const router_ = createRouter({
-  history: createWebHistory(import.meta.env.BASE_URL),
-  routes: [
-    {
-      path: '/',
-      redirect: { name: 'conversation', params: { conversationId: 'default' } }
-    },
-    {
-      path: '/chat',
-      name: 'welcome',
-      component: MainPage,
-      meta: { title: '承接组件' }
-    },
-    {
-      path: '/chat/:conversationId',
-      name: 'conversation',
-      component: MainPage,
-      props: true,
-      meta: { title: '会话组件' }
-    },
-  ],
-})
+const TestPage = () => import('@/views/TestPage/TestPage.vue')
 
 const router = createRouter({
   history: createWebHistory(),
@@ -53,6 +31,12 @@ const router = createRouter({
           meta: { title: '对话' }
         }
       ]
+    },
+    {
+      path: '/test',
+      name: 'test',
+      component: TestPage,
+      meta: { title: '图片生成与管理' }
     }
   ]
 })

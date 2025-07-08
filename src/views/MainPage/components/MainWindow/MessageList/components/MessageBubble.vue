@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted } from 'vue'
+import { computed, onMounted, watch } from 'vue'
 import { useConversationControlChild } from '@/composables/useConversationControl'
 import { useStreamControlChild } from '@/composables/useStreamControl'
 import UserBubble from './UserBubble.vue'
@@ -33,42 +33,6 @@ onMounted(() => {
   }
 })
 
-// 创建流状态的计算属性
-const messageStreamState = computed(() => {
-  // 如果不是助手消息，返回默认状态
-  if (props.message.role !== 'assistant') {
-    return {
-      isStreaming: false,
-      isPaused: false,
-      isError: false,
-      isCompleted: true,
-      isIncomplete: false
-    }
-  }
-
-  // 检查是否是当前活跃消息
-  const isActiveMessage = streamState.value.messageId === props.message.id
-  if (!isActiveMessage) {
-    return {
-      isStreaming: false,
-      isPaused: false,
-      isError: false,
-      isCompleted: true,
-      isIncomplete: false
-    }
-  }
-
-  console.log('[MessageBubble] 当前活跃消息状态', {
-    id: props.message.id,
-    contentLength: props.message.content.length,
-    isStreaming: streamState.value.isStreaming,
-    isPaused: streamState.value.isPaused,
-    isContentComplete: streamState.value.isContentComplete
-  })
-
-  return streamState.value
-})
-
 // 计算是否是用户消息
 const isUser = computed(() => {
   return props.message.role === 'user'
@@ -98,7 +62,7 @@ const handleShare = () => {
 
 // 中断生成
 const handlePause = () => {
-  if (messageStreamState.value.isStreaming) {
+  if (streamState.value.isStreaming) {
     // 确保设置当前消息ID
     streamControl.setMessageId(props.message.id)
     // 只暂停流，不中断请求
@@ -108,10 +72,27 @@ const handlePause = () => {
 
 // 恢复生成
 const handleResume = async () => {
-  if (messageStreamState.value.isPaused) {
+  if (streamState.value.isPaused) {
       streamControl.resumeStream()
   }
 }
+
+// 监控 isReasoningComplete 的变化
+watch(() => streamState.value.isReasoningComplete, (newVal) => {
+  console.log(`[MessageBubble] isReasoningComplete 变化 (消息ID: ${props.message.id}):`, newVal)
+}, { immediate: true })
+
+// 监控整个流状态
+watch(() => streamState.value, (newState) => {
+  if (props.isLatestMessage && props.message.role === 'assistant') {
+    console.log(`[MessageBubble] 流状态变化 (消息ID: ${props.message.id}):`, {
+      isStreaming: newState.isStreaming,
+      isPaused: newState.isPaused,
+      isContentComplete: newState.isContentComplete,
+      isReasoningComplete: newState.isReasoningComplete
+    })
+  }
+}, { deep: true, immediate: true })
 </script>
 
 <template>
@@ -124,10 +105,11 @@ const handleResume = async () => {
       v-else
       :content="content"
       :reasoning-content="message.reasoning_content"
-      :is-streaming="messageStreamState.isStreaming"
-      :is-error="messageStreamState.isError"
-      :is-paused="messageStreamState.isPaused"
-      :is-content-complete="messageStreamState.isContentComplete"
+      :is-streaming="streamState.isStreaming"
+      :is-error="streamState.isError"
+      :is-paused="streamState.isPaused"
+      :is-content-complete="streamState.isContentComplete"
+      :is-reasoning-complete="streamState.isReasoningComplete"
       :avatar="'https://t8.baidu.com/it/u=4011543194,454374607&fm=193'"
       @copy="handleCopy"
       @retry="handleRetry"

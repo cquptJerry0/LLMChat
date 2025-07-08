@@ -44,11 +44,11 @@ onMounted(() => {
   <el-container class="chat-layout">
     <!-- 侧边栏 -->
     <transition name="sidebar-fade">
-      <Sidebar
+    <Sidebar
         v-if="!isSidebarCollapsed"
-        class="chat-layout__sidebar"
-        @toggle-sidebar="toggleSidebar"
-      />
+      class="chat-layout__sidebar"
+      @toggle-sidebar="toggleSidebar"
+    />
     </transition>
 
     <!-- 触边显示侧边栏的触发区域 -->

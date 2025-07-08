@@ -229,6 +229,20 @@ onUnmounted(() => {
   if (messageListWrapper.value) {
     messageListWrapper.value.removeEventListener('scroll', handleScroll)
   }
+
+  // 如果有正在进行的流式传输，暂停它
+  if (streamControl.state.value.isStreaming) {
+    console.log(`[${instanceId.value}] Aborting active stream on unmount`)
+    streamControl.pauseStream() // 中断网络请求
+  }
+
+  // 重置所有状态
+  // isAutoScrollEnabled.value = true
+  // hasNewMessage.value = false
+  // lastSeenMessageId.value = ''
+  // showScrollToBottom.value = false
+  // currentStreamingMessageId.value = ''
+  // userScrolledDuringCurrentMessage.value = false
 })
 
 // 监听消息变化和流状态变化

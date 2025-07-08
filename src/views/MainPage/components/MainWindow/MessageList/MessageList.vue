@@ -27,15 +27,6 @@ const latestMessage = computed(() => {
 
   // 获取最后一条消息
   const message = allMessages.value[allMessages.value.length - 1]
-
-  // 记录日志
-  console.log('[MessageList] 计算latestMessage', {
-    id: message.id,
-    role: message.role,
-    contentLength: message.content.length,
-    refreshCounter: refreshCounter.value
-  })
-
   return message
 })
 
@@ -229,7 +220,7 @@ const handleStreamCompleted = (event: CustomEvent) => {
     console.log('[MessageList] 准备更新latestMessage', {
       oldLength: latestMessage.value.content?.length,
       newLength: (content || allMessages.value[messageIndex].content)?.length,
-      isContentComplete: true
+      isContentComplete: true,
     })
 
     // 强制更新消息对象 - 直接修改数组中的对象
